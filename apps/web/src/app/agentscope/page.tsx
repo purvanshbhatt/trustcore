@@ -14,17 +14,42 @@ import {
   AlertOctagon,
   Check,
   Copy,
+  KeyRound,
+  ShieldAlert,
+  Terminal,
+  Globe,
+  Edit3,
+  Eye,
+  Lock,
 } from 'lucide-react';
-import { FileDropzone } from '@/components/FileDropzone';
 import { FindingsTable } from '@/components/FindingsTable';
 import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
-import { ScanInputFile, Report, SourceCitation, PermissionDiffItem } from '@/lib/types';
+import { ScanInputFile, Report, SourceCitation, MCPToolPermission } from '@/lib/types';
 import { runScan, getSampleData } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
 
 export default function AgentScopePage() {
-  const [files, setFiles] = useState<ScanInputFile[]>([]);
+  const [activeTab, setActiveTab] = useState<'matrix' | 'diff'>('matrix');
+  const [mcpJsonContent, setMcpJsonContent] = useState(`{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/"],
+      "scopes": ["*"],
+      "env": {
+        "ANTHROPIC_API_KEY": "sk-ant-live-secret-prod-token-9988223344"
+      }
+    },
+    "terminal_executor": {
+      "command": "bash",
+      "args": ["-c"],
+      "tools": ["bash", "run_command", "exec"],
+      "confirmation_required": false
+    }
+  }
+}`);
+
   const [projectName, setProjectName] = useState('Claude Desktop MCP Config');
   const [report, setReport] = useState<Report | null>(MOCK_REPORTS.agentscope);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,30 +61,37 @@ export default function AgentScopePage() {
   const [activeFindingTitle, setActiveFindingTitle] = useState<string>('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const handleLoadSample = async () => {
-    setIsLoading(true);
-    try {
-      const sample = await getSampleData('agentscope');
-      setProjectName(sample.project_name || 'Claude Desktop MCP Suite');
-      setFiles(sample.files || []);
-    } catch {
-      // fallback
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleRunScan = async () => {
     setIsLoading(true);
     try {
       const res = await runScan({
         product: 'agentscope',
         project_name: projectName,
-        files: files.length > 0 ? files : (MOCK_REPORTS.agentscope.metadata?.sample_files || []),
+        files: [
+          {
+            filename: 'claude_desktop_config.json',
+            content: mcpJsonContent,
+          },
+        ],
       });
       setReport(res);
     } catch (err) {
       console.error('Scan failed:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLoadSample = async () => {
+    setIsLoading(true);
+    try {
+      const sample = await getSampleData('agentscope');
+      setProjectName(sample.project_name || 'Claude Desktop & Agent Workstation Config');
+      if (sample.files && sample.files[0]) {
+        setMcpJsonContent(sample.files[0].content);
+      }
+    } catch {
+      // fallback
     } finally {
       setIsLoading(false);
     }
@@ -96,6 +128,24 @@ export default function AgentScopePage() {
     setTimeout(() => setCopiedDiff(false), 2000);
   };
 
+  const permissionsMatrix: MCPToolPermission[] =
+    report?.permissions_matrix || MOCK_REPORTS.agentscope.permissions_matrix || [];
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'Read':
+        return <Eye className="h-4 w-4 text-blue-400" />;
+      case 'Write':
+        return <Edit3 className="h-4 w-4 text-purple-400" />;
+      case 'Destructive':
+        return <Terminal className="h-4 w-4 text-red-400" />;
+      case 'Network':
+        return <Globe className="h-4 w-4 text-amber-400" />;
+      default:
+        return <Shield className="h-4 w-4 text-zinc-400" />;
+    }
+  };
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
@@ -124,26 +174,26 @@ export default function AgentScopePage() {
         )}
       </div>
 
-      {/* Ingestion Dropzone */}
+      {/* Ingestion & Config Editor */}
       <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
+          <div>
             <h3 className="text-sm font-semibold text-zinc-200">
-              Upload MCP Manifest or Agent Config
+              Paste or Upload MCP Config (mcp.json / claude_desktop_config.json)
             </h3>
             <p className="text-xs text-zinc-400">
-              Drop <code className="text-purple-300">claude_desktop_config.json</code>, agent manifest, or YAML tool definitions.
+              Evaluates server mounts, scopes, embedded API keys, and tool permissions.
             </p>
           </div>
 
           <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              placeholder="Config Name"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="rounded-lg border border-zinc-800 bg-[#090a0f] px-3 py-1.5 text-xs text-zinc-200 focus:outline-none"
-            />
+            <button
+              onClick={handleLoadSample}
+              className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20"
+            >
+              <Sparkles className="mr-1 inline-block h-3.5 w-3.5" />
+              Load Sample MCP
+            </button>
             <button
               onClick={handleRunScan}
               disabled={isLoading}
@@ -155,19 +205,47 @@ export default function AgentScopePage() {
           </div>
         </div>
 
-        <FileDropzone
-          files={files}
-          onFilesChange={setFiles}
-          onLoadSample={handleLoadSample}
-          sampleLabel="Load Over-Privileged MCP Sample"
-          acceptLabel="Supported: claude_desktop_config.json, mcp.json, agent.yaml"
-        />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <span className="font-mono">claude_desktop_config.json</span>
+            <span>JSON schema validated</span>
+          </div>
+          <textarea
+            rows={7}
+            value={mcpJsonContent}
+            onChange={(e) => setMcpJsonContent(e.target.value)}
+            className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] p-3 font-mono text-xs text-zinc-200 focus:border-purple-500 focus:outline-none leading-relaxed"
+          />
+        </div>
       </div>
 
-      {/* Results and Diff View */}
+      {/* Plaintext Secret Alerts Banner */}
+      <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4">
+        <div className="flex items-start space-x-3">
+          <div className="rounded-lg bg-red-500/20 p-2 text-red-400">
+            <KeyRound className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <span className="font-semibold text-sm text-red-200">
+                Plaintext Secret Alert: Hardcoded API Key in MCP Environment Block
+              </span>
+              <span className="rounded bg-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                CRITICAL EXPOSURE
+              </span>
+            </div>
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              Detected <code className="text-red-300 font-mono">ANTHROPIC_API_KEY: &quot;sk-ant-live-secret-prod-token-9988223344&quot;</code> embedded in plain text inside <code className="text-zinc-300 font-mono">claude_desktop_config.json</code>.
+              Anyone with access to dotfiles or synced git repositories can extract this credential.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Analysis View: Tabs for Permissions Matrix vs Diff View */}
       {report && (
         <div className="space-y-6">
-          {/* Blast Radius Reduction Banner */}
+          {/* Top Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-purple-400">
@@ -177,51 +255,144 @@ export default function AgentScopePage() {
                 -{report.metadata?.blast_radius_reduction_pct || 78}%
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                Achieved by scoping filesystem mounts and removing wildcard tools.
+                Scoping filesystem mounts & removing wildcard tools.
               </p>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Readiness Gate
+                Readiness Status
               </span>
               <p className="mt-1 text-2xl font-bold text-red-400">
                 {report.summary.readiness_status}
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                Requires applying least-privilege diff before production deployment.
+                Requires least-privilege scoping before agent launch.
               </p>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Audited Capabilities
+                Tool Scopes Audited
               </span>
               <p className="mt-1 text-2xl font-bold text-zinc-100">
-                {report.metadata?.audited_tools_count || 5} Tools / Mounts
+                {permissionsMatrix.length} Capabilities
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                {report.findings.length} permission violations identified.
+                Categorized across Read, Write, Destructive, Network.
               </p>
             </div>
           </div>
 
-          {/* Interactive Before / After Permission Diff View */}
-          {report.permission_diff && report.permission_diff.length > 0 && (
+          {/* View Mode Switcher */}
+          <div className="flex items-center space-x-2 border-b border-zinc-800 pb-3">
+            <button
+              onClick={() => setActiveTab('matrix')}
+              className={`flex items-center space-x-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                activeTab === 'matrix'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              <span>Visual Permissions Matrix (Read / Write / Destructive / Network)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('diff')}
+              className={`flex items-center space-x-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                activeTab === 'diff'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+              }`}
+            >
+              <GitCompare className="h-4 w-4" />
+              <span>Before / After Permission Diff</span>
+            </button>
+          </div>
+
+          {/* TAB 1: VISUAL PERMISSIONS MATRIX (Read / Write / Destructive / Network) */}
+          {activeTab === 'matrix' && (
             <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="rounded-lg bg-purple-500/10 p-1.5 text-purple-400">
-                    <GitCompare className="h-4 w-4" />
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100">
+                    Agent Permissions Matrix by Category
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Evaluation of capabilities across Read, Write, Destructive, and Network access surfaces.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {permissionsMatrix.map((tool, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-col justify-between rounded-xl border border-zinc-800 bg-[#0c0d14] p-4 space-y-3"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div className="rounded-lg bg-zinc-900 border border-zinc-800 p-1.5">
+                            {getCategoryIcon(tool.category)}
+                          </div>
+                          <div>
+                            <span className="font-bold text-xs text-zinc-200">
+                              {tool.name}
+                            </span>
+                            <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-400">
+                              {tool.category}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            tool.status === 'ALLOWED'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : tool.status === 'BLOCKED'
+                              ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                          }`}
+                        >
+                          {tool.status}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        {tool.description}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-500">
+                      <span className="font-mono truncate max-w-[200px]">
+                        Scope: {tool.scope}
+                      </span>
+                      <span>
+                        Human Approval:{' '}
+                        <strong className="text-zinc-300">
+                          {tool.confirmationRequired ? 'Mandatory' : 'Optional'}
+                        </strong>
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-zinc-100">
-                      Before / After Permission Diff View
-                    </h3>
-                    <p className="text-xs text-zinc-400">
-                      Deterministic comparison between active config and suggested least-privilege configuration.
-                    </p>
-                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: BEFORE / AFTER PERMISSION DIFF */}
+          {activeTab === 'diff' && report.permission_diff && (
+            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100">
+                    Before / After Least-Privilege Diff
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Compares current dangerous manifest against hardened production baseline.
+                  </p>
                 </div>
 
                 <button
@@ -244,26 +415,22 @@ export default function AgentScopePage() {
 
               {/* Diff Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-zinc-800 bg-zinc-900/40 text-zinc-400">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="border-b border-zinc-800 bg-zinc-900/40 text-zinc-400 font-sans">
                     <tr>
-                      <th className="py-2.5 px-3 font-medium">Config Field</th>
-                      <th className="py-2.5 px-3 font-medium text-red-400">Active (Over-Privileged)</th>
-                      <th className="py-2.5 px-3 font-medium text-emerald-400">Recommended (Least-Privilege)</th>
-                      <th className="py-2.5 px-3 font-medium">Action</th>
-                      <th className="py-2.5 px-3 font-medium">Deterministic Justification</th>
+                      <th className="py-2.5 px-3">Field</th>
+                      <th className="py-2.5 px-3 text-red-400">Before (Dangerous)</th>
+                      <th className="py-2.5 px-3 text-emerald-400">After (Scoped)</th>
+                      <th className="py-2.5 px-3">Action</th>
+                      <th className="py-2.5 px-3 font-sans">Reason</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60 font-mono">
+                  <tbody className="divide-y divide-zinc-800/60">
                     {report.permission_diff.map((item, idx) => (
                       <tr key={idx} className="hover:bg-zinc-900/30">
                         <td className="py-3 px-3 text-zinc-300 font-semibold">{item.field}</td>
-                        <td className="py-3 px-3 text-red-400 bg-red-500/5 whitespace-pre">
-                          {String(item.before_value)}
-                        </td>
-                        <td className="py-3 px-3 text-emerald-400 bg-emerald-500/5 whitespace-pre">
-                          {String(item.after_value)}
-                        </td>
+                        <td className="py-3 px-3 text-red-400 bg-red-500/5">{String(item.before_value)}</td>
+                        <td className="py-3 px-3 text-emerald-400 bg-emerald-500/5">{String(item.after_value)}</td>
                         <td className="py-3 px-3">
                           <span
                             className={`rounded px-2 py-0.5 text-[10px] font-bold ${
@@ -291,7 +458,7 @@ export default function AgentScopePage() {
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-purple-400" />
-                <span>One-Click Remediation Prompts</span>
+                <span>One-Click Remediation Prompts (Engine 2)</span>
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {report.remediation_prompts.map((p, idx) => (

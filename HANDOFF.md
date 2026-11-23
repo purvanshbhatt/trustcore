@@ -1,90 +1,39 @@
 # TrustCore: Shared AI Security & Readiness Monorepo — HANDOFF & ARCHITECTURE MAP
 
 **Repository Version:** 1.0.0  
-**Status:** Production-Structured Monorepo  
+**Phase Completed:** Phase 1: Interactive Frontend & Dual-Engine Core  
 **Target Deployment:** Google Cloud Run (Backend API) + Vercel / Cloudflare (Frontend Web)  
+**Live GitHub Repository:** [https://github.com/purvanshbhatt/trustcore](https://github.com/purvanshbhatt/trustcore)  
 **Primary Principle:** Dual-Engine Architecture (Deterministic Rule Engine + LLM Explanation Layer)
 
 ---
 
-## 1. Executive Summary & Mission
-
-**TrustCore** is an enterprise-grade AI security and readiness suite providing four specialized applications built upon a shared, deterministic Python core engine, a unified Next.js frontend shell, and a centralized Stripe billing module:
-
-1. **LaunchGate (`/launchgate`)** — Pre-launch security gate for applications built with Cursor, Lovable, or Replit. Detects hardcoded secrets (OpenAI, Anthropic, Stripe, AWS, Supabase service roles), open Supabase/PostgreSQL RLS policies (`USING (true)`), Firebase open rules, and hallucinated npm/pip packages. Generates one-click copyable remediation prompts for immediate paste into Cursor or Lovable prompt bars.
-2. **AgentScope (`/agentscope`)** — Access and permissions auditor for AI agents and Model Context Protocol (MCP) server configurations (`claude_desktop_config.json`, YAML manifests, agent tool definitions). Identifies wildcard scopes (`*`), embedded plaintext credentials, and root filesystem mounts (`/`). Computes an interactive **Before / After Permission Diff** reducing agent blast radius by up to 78%.
-3. **Evidence-to-Answer (`/evidence`)** — Zero-hallucination security questionnaire workbench. Ingests organizational security policies, SOC 2 documents, and questionnaire requirements. Deterministically matches controls with exact file and line-level citations. **Explicitly flags unsupported evidence gaps** (`UNSUPPORTED_GAP`) to prevent fraudulent compliance attestations.
-4. **EvalKit (`/evalkit`)** — Workflow regression and prompt-injection evaluation runner. Tests system prompts and agent workflows against deterministic assertions and adversarial attack vectors: direct prompt injection, DAN/jailbreak persona overrides, system prompt canary token exfiltration (`CANARY_AUTH_SECRET_8819`), and tool parameter hijacking (`DROP TABLE`). Exports client acceptance reports.
-
----
-
-## 2. The Non-Negotiable Architectural Principle: Dual-Engine Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          INGESTED ARTIFACTS                            │
-│  (Source Files, SQL Migrations, MCP JSON, SOC 2 Policies, Prompts)     │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                 ENGINE 1: DETERMINISTIC RULE ENGINE                    │
-│                                                                        │
-│  • 100% Deterministic Regex, AST, Matrix & Assertions in Python code   │
-│  • Strict Pydantic v2 schemas                                          │
-│  • Exact source references (file, line_start, snippet, rule_id)        │
-│  • Severity scoring (CRITICAL, HIGH, MEDIUM, LOW, INFO)                │
-│  • Readiness gate status (PASSED, WARNING, BLOCKED)                    │
-│  • ZERO LLM intervention — NO fabricated findings or evidence          │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Verified Findings & Citations
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                   ENGINE 2: LLM EXPLANATION LAYER                      │
-│                                                                        │
-│  • Swappable explainer adapter (Mock mode default, Gemini / OpenAI)    │
-│  • ONLY translates verified deterministic findings into:               │
-│      1. Plain-English executive summaries & risk narratives            │
-│      2. Copy-paste remediation prompts formatted for Cursor/Claude     │
-│      3. Step-by-step developer remediation checklists                  │
-│  • NEVER invents findings, alters risk scores, or modifies citations   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                    UNIFIED REPORT & PERSISTENCE                        │
-│   (Storage Repository -> REST API -> Next.js Source-Cited Viewer)      │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 3. Monorepo Structure
+## 1. Monorepo Folder Tree
 
 ```text
 trustcore/
 ├── apps/
-│   └── web/                                # Next.js (App Router) Frontend
+│   └── web/                                # Next.js 14 (App Router) + TypeScript + Tailwind
 │       ├── src/
 │       │   ├── app/
 │       │   │   ├── layout.tsx              # Unified dark/light shell & typography
 │       │   │   ├── page.tsx                # Overview / Quick-Launch Hub for all 4 tools
-│       │   │   ├── globals.css             # Tailwind enterprise minimalist theme & scrollbars
-│       │   │   ├── launchgate/page.tsx     # Ingestion + findings + Cursor fix prompts
-│       │   │   ├── agentscope/page.tsx     # MCP config audit + Before/After diff view
-│       │   │   ├── evidence/page.tsx       # SOC 2 workbench + citation/gap matrix
-│       │   │   ├── evalkit/page.tsx        # Adversarial injection harness + acceptance report
+│       │   │   ├── globals.css             # Tailwind enterprise minimalist theme & custom scrollbars
+│       │   │   ├── launchgate/page.tsx     # Ingestion (GitHub/ZIP/Snippet) + severity cards + fix prompts
+│       │   │   ├── agentscope/page.tsx     # MCP config audit + visual permissions matrix + diff view
+│       │   │   ├── evidence/page.tsx       # Dual dropzone + answer table (4 columns) + gap flags
+│       │   │   ├── evalkit/page.tsx        # Adversarial harness + model regression diff + acceptance sign-off
 │       │   │   └── reports/[id]/page.tsx   # Shared Source-Cited Report Viewer (MD/JSON/Print)
 │       │   ├── components/
-│       │   │   ├── AppShell.tsx            # Unified sidebar shell + product switcher + health
+│       │   │   ├── AppShell.tsx            # Unified sidebar shell + product switcher + health indicator
 │       │   │   ├── FileDropzone.tsx        # Multi-file drag/drop + paste + sample loader
 │       │   │   ├── FindingsTable.tsx       # Severity badges, rule IDs, click-to-cite action
-│       │   │   ├── CitationDrawer.tsx      # Flyout showing exact source snippet, line, file
+│       │   │   ├── CitationDrawer.tsx      # Flyout showing exact source snippet, line, and file
 │       │   │   ├── FixPromptCard.tsx       # One-click copyable remediation prompt block
-│       │   │   └── PaywallModal.tsx        # Reusable Stripe checkout modal (per-job & tiers)
+│       │   │   └── PaywallModal.tsx        # Reusable Stripe checkout modal (per-job & monthly tiers)
 │       │   └── lib/
 │       │       ├── types.ts                # Shared Finding, Citation, Report, and Run schemas
-│       │       ├── api.ts                  # Resilient API client with automatic mock fallback
+│       │       ├── api.ts                  # API client with NEXT_PUBLIC_USE_MOCK toggle
 │       │       └── mockData.ts             # Realistic synthetic sample outputs for all 4 tools
 │       ├── package.json
 │       ├── tsconfig.json
@@ -118,103 +67,126 @@ trustcore/
 ├── package.json                            # Monorepo root scripts
 ├── .env.example                            # Comprehensive environment variable template
 ├── .gitignore
+├── README.md                               # Project documentation & architecture diagram
 └── HANDOFF.md                              # This architecture and operations document
 ```
 
 ---
 
-## 4. Quickstart Guide
+## 2. Exact Commands to Run Locally
 
-### Prerequisites
-- Node.js 18+ (tested with v24.21.0)
-- Python 3.11+ (tested with Python 3.14.8)
-- Linux / macOS / WSL
-
-### 1. Environment Setup
+### Run Frontend Web App (`apps/web`)
 ```bash
-cd /home/purvansh/Projects/trustcore
-cp .env.example .env
+cd apps/web
+npm install
+npm run dev
+# Running on http://localhost:3000
 ```
 
-### 2. Run the Backend (FastAPI API)
-The backend uses a Python virtual environment located at `services/api/.venv`:
+To build production bundle and verify TypeScript types:
+```bash
+cd apps/web
+npm run build
+# Result: ✓ Compiled successfully, 0 TypeScript errors
+```
+
+### Run Backend FastAPI (`services/api`)
 ```bash
 cd services/api
+# Activate existing virtualenv
 source .venv/bin/activate
-# Run API server on port 8000
+# Run server
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Running on http://localhost:8000
+# OpenAPI Docs: http://localhost:8000/docs
 ```
-API Healthcheck: `http://localhost:8000/health`  
-Interactive Swagger Docs: `http://localhost:8000/docs`
 
-### 3. Run the Backend Test Suite
+### Run Backend Pytest Suite
 ```bash
 cd services/api
 .venv/bin/pytest tests/
-# Output: 6 passed in 0.47s
+# Result: 6 passed in 0.47s
 ```
 
-### 4. Run the Frontend (Next.js)
-```bash
-cd apps/web
-npm run dev
-```
-Open `http://localhost:3000` to launch the unified TrustCore hub.
+---
+
+## 3. What is Currently Mocked vs. Wired
+
+| Module | Status | Details |
+|---|---|---|
+| **Frontend Layout & Shell** | **WIRED & LIVE** | Unified left sidebar navigating between Hub, LaunchGate, AgentScope, Evidence-to-Answer, EvalKit, and Reports. |
+| **LaunchGate UI** | **WIRED & LIVE** | Multi-mode input (GitHub URL, ZIP upload, Code snippet, One-click sample), severity cards, findings table, one-click copy fix prompts for Cursor/Claude. |
+| **AgentScope UI** | **WIRED & LIVE** | MCP JSON editor, Visual Permissions Matrix (**Read / Write / Destructive / Network**), plaintext secret alerts, and interactive Before / After Diff view. |
+| **Evidence-to-Answer UI** | **WIRED & LIVE** | **Dual Dropzone** (Questionnaire CSV/XLSX + Evidence Docs), answer table with 4 columns: `Question`, `Draft Answer`, `Exact Source Citation` (opens CitationDrawer), and `Status` (`SUPPORTED` vs `EVIDENCE GAP`). |
+| **EvalKit UI** | **WIRED & LIVE** | Test-case table (baseline + adversarial injection), interactive Run Eval runner, **Model Version Regression Diff** (v1.0 vs v1.2), and **Client Acceptance Certificate Modal**. |
+| **Paywall & Billing** | **MOCKED / WIRED** | `MOCK_BILLING=true` by default so users can test Stripe upgrade checkout sessions locally without credit card or live keys. Real Stripe client activates when `MOCK_BILLING=false` and `STRIPE_SECRET_KEY` is provided. |
+| **API Fallback Toggle** | **WIRED & LIVE** | `NEXT_PUBLIC_USE_MOCK=true` serves instant synthetic data; when set to `false`, calls FastAPI backend with automatic graceful fallback if disconnected. |
+| **Engine 1 Rule Engine** | **WIRED & LIVE** | Real deterministic regex secret scanning, Supabase/Firebase RLS rules, package audits, MCP JSON permission parsing, policy keyword matching, and canary exfiltration test harness. |
+| **Engine 2 LLM Layer** | **MOCKED / ADAPTER** | Rule-to-narrative synthesis generates executive summaries and Cursor prompts by default. Ready to plug into live Gemini or OpenAI via `LLM_EXPLAINER_PROVIDER=gemini` or `openai`. |
 
 ---
 
-## 5. Product Modules & Deterministic Rules Reference
+## 4. API Endpoints & JSON Schemas
 
-| Product | Rule ID | Category | Severity | Description |
-|---|---|---|---|---|
-| **LaunchGate** | `LG-SEC-001` | Secret Leak | CRITICAL | Hardcoded OpenAI API key (`sk-proj-...`) |
-| **LaunchGate** | `LG-SEC-002` | Secret Leak | CRITICAL | Hardcoded Anthropic API key (`sk-ant-...`) |
-| **LaunchGate** | `LG-SEC-003` | Secret Leak | CRITICAL | Hardcoded Stripe Secret key (`sk_live_...`) |
-| **LaunchGate** | `LG-SEC-004` | Secret Leak | CRITICAL | Hardcoded AWS Access Key ID (`AKIA...`) |
-| **LaunchGate** | `LG-SEC-005` | Secret Leak | CRITICAL | Hardcoded Supabase Service Role JWT |
-| **LaunchGate** | `LG-RLS-001` | Database RLS | CRITICAL | Open PostgreSQL/Supabase RLS: `USING (true)` |
-| **LaunchGate** | `LG-RLS-002` | Database RLS | CRITICAL | Open Firebase rule: `allow read, write: if true;` |
-| **LaunchGate** | `LG-PKG-001` | Package Audit | HIGH | Hallucinated npm package (e.g. `auth0-next-toolkit`) |
-| **LaunchGate** | `LG-ENV-001` | Frontend Leak | CRITICAL | Client prefix (`NEXT_PUBLIC_`) on backend service key |
-| **AgentScope** | `AS-SCP-001` | Wildcard Scope | CRITICAL | Wildcard tool/action scope (`"*"`, `"admin:*"`) |
-| **AgentScope** | `AS-KEY-001` | Credential | HIGH | Embedded plaintext API key in MCP `env` block |
-| **AgentScope** | `AS-FS-001` | Filesystem | CRITICAL | Dangerous root filesystem mount (`/`, `~`, `C:\`) |
-| **AgentScope** | `AS-TOOL-001`| Risky Tool | HIGH | Destructive unconfirmed tool execution (`bash`, `drop_database`) |
-| **Evidence** | `EV-GAP-001` | Evidence Gap | HIGH | Missing deterministic evidence for compliance control |
-| **EvalKit** | `EVK-ADV-001` | Prompt Injection | CRITICAL | System prompt canary exfiltration (`CANARY_AUTH_SECRET_8819`) |
-| **EvalKit** | `EVK-ADV-002` | Prompt Injection | HIGH | DAN / persona roleplay jailbreak compliance |
-| **EvalKit** | `EVK-ADV-003` | Tool Hijack | CRITICAL | Destructive SQL invocation parameter hijacking |
+### Endpoints
+- `GET /health` / `GET /api/v1/health`: Server health, dual-engine status, billing mode.
+- `POST /api/v1/run/{product}`: Execute scan for `launchgate`, `agentscope`, `evidence`, or `evalkit`. Returns structured `Report`.
+- `GET /api/v1/reports/{id}`: Retrieve persisted scan report.
+- `GET /api/v1/reports`: List recent scan reports.
+- `GET /api/v1/samples/{product}`: Return preloaded realistic sample files for instant UI testing.
+- `POST /api/v1/billing/checkout`: Create Stripe Checkout Session (per-scan, pro, enterprise).
+- `POST /api/v1/billing/webhook`: Stripe webhook signature verification and entitlement updates.
+- `GET /api/v1/billing/status`: User tier, credits remaining, and mock status.
 
----
-
-## 6. Stripe Billing & Webhook Layer
-
-Billing is encapsulated cleanly in `services/api/app/core/billing.py` and exposed via `/api/v1/billing/*`:
-- **Mock Mode (`MOCK_BILLING=true`):** Simulates instant checkout success without making external network calls or needing live Stripe API keys. Great for local layout work and testing.
-- **Live Mode (`MOCK_BILLING=false`):** Calls official `stripe.checkout.Session.create()` using configured price IDs (`STRIPE_PRICE_ID_PER_SCAN`, `STRIPE_PRICE_ID_PRO`, `STRIPE_PRICE_ID_ENTERPRISE`).
-- **Webhook Endpoint (`/api/v1/billing/webhook`):** Validates incoming `Stripe-Signature` headers with `STRIPE_WEBHOOK_SECRET` and unpacks event payloads.
-
----
-
-## 7. Containerization & Google Cloud Run
-
-A production-ready `services/api/Dockerfile` is included:
-- Base: `python:3.11-slim`
-- Security: Non-root user `trustcore` (UID 1000)
-- Port: Automatically binds to `$PORT` (defaults to 8000 for local, 8080 on Cloud Run)
-- Build & Deploy Command:
-  ```bash
-  cd services/api
-  gcloud builds submit --tag gcr.io/[PROJECT_ID]/trustcore-api
-  gcloud run deploy trustcore-api --image gcr.io/[PROJECT_ID]/trustcore-api --platform managed --allow-unauthenticated
+### Core Schemas (`schemas.py` / `types.ts`)
+- **`Finding`**:
+  ```typescript
+  {
+    id: string;
+    rule_id: string;
+    product: "launchgate" | "agentscope" | "evidence" | "evalkit";
+    title: string;
+    description: string;
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+    category: string;
+    citation: SourceCitation;
+    impact: string;
+    remediation_prompt?: RemediationPrompt;
+    metadata?: Record<string, any>;
+  }
+  ```
+- **`SourceCitation`**:
+  ```typescript
+  {
+    file_path: string;
+    line_start?: number;
+    line_end?: number;
+    section_title?: string;
+    snippet: string;
+    source_type: "code" | "config" | "policy_doc" | "questionnaire" | "test_case";
+  }
+  ```
+- **`RemediationPrompt`**:
+  ```typescript
+  {
+    title: string;
+    description: string;
+    prompt_text: string;
+    target_tool: "Cursor / Lovable" | "Claude Code / Windsurf" | "Terminal / CLI" | "Security Policy";
+  }
   ```
 
 ---
 
-## 8. State for Switching Between IDEs & Agents
+## 5. Next Steps for Production Hardening
 
-If picking up this repository in Cursor, Claude Code, Windsurf, or another environment:
-- **FastAPI Backend Virtualenv:** Located at `services/api/.venv/bin/python`.
-- **Sample Testing Data:** Each tool has a dedicated `GET /api/v1/samples/{product}` endpoint providing realistic code, SQL, MCP JSON, and SOC 2 markdown.
-- **Frontend Fallback:** The web app has built-in resilient fallbacks in `apps/web/src/lib/api.ts` so all UI interactions work cleanly even if the backend is temporarily offline.
-- **Extending Rules:** To add a new deterministic rule, create a new rule definition in `services/api/app/rules/` implementing `BaseRulePack`, register it in `services/api/app/core/engine.py`, and the entire frontend findings table, citation drawer, and fix prompt cards will automatically reflect the findings!
+1. **Rule Pack Deepening:**
+   - Expand `launchgate.py` with Python AST visitor for SQL injection (`raw_sql` string concatenation).
+   - Expand `agentscope.py` with network CIDR egress validation for sandboxed agent environments.
+2. **Connecting Live LLM:**
+   - Add `GEMINI_API_KEY` or `OPENAI_API_KEY` in `.env` and set `LLM_EXPLAINER_PROVIDER=gemini`.
+3. **Connecting Live Stripe:**
+   - Add live Stripe credentials (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) and set `MOCK_BILLING=false`.
+4. **Deploying to Google Cloud Run:**
+   - Build container with `gcloud builds submit --tag gcr.io/[PROJECT_ID]/trustcore-api services/api`
+   - Deploy container with `gcloud run deploy trustcore-api --image gcr.io/[PROJECT_ID]/trustcore-api --platform managed`
