@@ -105,36 +105,40 @@ You have access to tool 'execute_database_query' for querying customer profiles.
       auditorNotes: 'Verified zero canary leak exfiltrations and zero destructive tool invocations.',
     };
 
+  const passedCount = evalCases.filter((tc) => tc.status === 'PASSED').length;
+  const failedCount = evalCases.filter((tc) => tc.status === 'FAILED').length;
+  const passRate = evalCases.length > 0 ? Math.round((passedCount / evalCases.length) * 100) : 40;
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
         <div>
-          <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-amber-400">
+          <div className="flex items-center space-x-2 text-xs font-mono font-semibold uppercase tracking-wider text-amber-400">
             <CheckSquare className="h-4 w-4" />
             <span>Product 4 of 4 • Workflow Regression & Adversarial Runner</span>
           </div>
-          <h1 className="mt-1 text-2xl font-bold text-white">
+          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
             EvalKit — Prompt Injection & Client Acceptance Runner
           </h1>
-          <p className="mt-1 text-xs text-zinc-400">
-            Execute deterministic assertions and adversarial prompt-injection payloads (canary token leaks, jailbreaks, tool hijacks) with client acceptance sign-off.
+          <p className="mt-1 text-xs text-zinc-400 max-w-2xl">
+            Execute deterministic assertions and adversarial prompt-injection payloads (canary token leaks, jailbreaks, tool hijacks) with auditable client acceptance sign-off.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2.5">
           <button
             onClick={() => setShowAcceptanceModal(true)}
-            className="flex items-center space-x-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/20"
+            className="flex items-center space-x-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition shadow"
           >
             <Award className="h-4 w-4 text-amber-400" />
-            <span>Client Acceptance Report</span>
+            <span>Client Acceptance Certificate</span>
           </button>
 
           {report && (
             <Link
               href={`/reports/${report.id}`}
-              className="flex items-center space-x-1.5 rounded-lg border border-zinc-700 bg-zinc-800/80 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-700"
+              className="flex items-center space-x-1.5 rounded-xl border border-zinc-700 bg-zinc-800/80 px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition shadow"
             >
               <span>View Report</span>
               <ArrowRight className="h-3.5 w-3.5" />
@@ -144,10 +148,10 @@ You have access to tool 'execute_database_query' for querying customer profiles.
       </div>
 
       {/* Ingestion & Workflow Prompt Setup */}
-      <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 sm:p-6 space-y-4">
+      <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-zinc-200">
+            <h3 className="text-sm font-bold text-zinc-200">
               Agent Workflow & Prompt Harness Ingestion
             </h3>
             <p className="text-xs text-zinc-400">
@@ -158,7 +162,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
           <div className="flex items-center space-x-2">
             <button
               onClick={handleLoadSample}
-              className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/20"
+              className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition"
             >
               <Sparkles className="mr-1 inline-block h-3.5 w-3.5" />
               Load Canary Prompt
@@ -166,7 +170,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
             <button
               onClick={handleRunScan}
               disabled={isLoading}
-              className="flex items-center space-x-1.5 rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-amber-500 disabled:opacity-50"
+              className="flex items-center space-x-1.5 rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-500 disabled:opacity-50 transition active:scale-[0.98]"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
               <span>{isLoading ? 'Running Adversarial Suite...' : 'Run Eval Suite'}</span>
@@ -176,14 +180,14 @@ You have access to tool 'execute_database_query' for querying customer profiles.
 
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span className="font-mono">agent_system_prompt.txt</span>
-            <span>Canary token test harness</span>
+            <span className="font-mono text-zinc-300">agent_system_prompt.txt</span>
+            <span className="font-mono text-[11px] text-zinc-500">Canary token test harness</span>
           </div>
           <textarea
             rows={5}
             value={promptContent}
             onChange={(e) => setPromptContent(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] p-3 font-mono text-xs text-zinc-200 focus:border-amber-500 focus:outline-none leading-relaxed"
+            className="w-full rounded-xl border border-zinc-800 bg-[#090a0f] p-3 font-mono text-xs text-zinc-200 focus:border-amber-500 focus:outline-none leading-relaxed"
           />
         </div>
       </div>
@@ -193,42 +197,69 @@ You have access to tool 'execute_database_query' for querying customer profiles.
         <div className="space-y-6">
           {/* Acceptance Scorecard Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-4">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                 Eval Pass Rate
               </span>
-              <p className="mt-1 text-2xl font-bold text-amber-400">
-                {report.metadata?.pass_rate || 40}%
+              <p className="mt-1 text-3xl font-extrabold text-amber-400 font-mono">
+                {passRate}%
               </p>
-              <span className="text-[10px] text-zinc-500">
-                {report.metadata?.passed_tests || 2} of {report.metadata?.total_tests || 5} Passed
+              <span className="text-[10px] text-zinc-400">
+                {passedCount} of {evalCases.length} Tests Passed
               </span>
             </div>
 
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-red-400">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-red-400">
                 Vulnerabilities Found
               </span>
-              <p className="mt-1 text-2xl font-bold text-red-400">
-                {report.metadata?.failed_tests || 3} Defenses Failed
+              <p className="mt-1 text-3xl font-extrabold text-red-400 font-mono">
+                {failedCount} Defenses Failed
               </p>
               <span className="text-[10px] text-zinc-400">Canary Leak & Tool Hijack</span>
             </div>
 
-            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-4">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                 Client Acceptance Status
               </span>
-              <p className="mt-1 text-2xl font-bold text-red-400">BLOCKED</p>
-              <span className="text-[10px] text-zinc-500">Canary exfiltrated</span>
+              <p className="mt-1 text-2xl font-extrabold text-red-400 font-mono">BLOCKED</p>
+              <span className="text-[10px] text-zinc-400">Canary exfiltrated</span>
             </div>
 
-            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-4">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                 Deterministic Canary
               </span>
-              <p className="mt-1 text-2xl font-bold text-zinc-100">CANARY_8819</p>
-              <span className="text-[10px] text-red-400">Exfiltrated under injection</span>
+              <p className="mt-1 text-2xl font-bold text-zinc-100 font-mono">CANARY_8819</p>
+              <span className="text-[10px] text-red-400 font-semibold">Exfiltrated under injection</span>
+            </div>
+          </div>
+
+          {/* Interactive Test Pass Rate Progress Bar */}
+          <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-zinc-400">Adversarial Evaluation Distribution:</span>
+              <div className="flex items-center space-x-3">
+                <span className="text-emerald-400 flex items-center">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 mr-1.5" />
+                  {passedCount} Passed ({passRate}%)
+                </span>
+                <span className="text-red-400 flex items-center">
+                  <span className="h-2 w-2 rounded-full bg-red-400 mr-1.5" />
+                  {failedCount} Vulnerable ({100 - passRate}%)
+                </span>
+              </div>
+            </div>
+            <div className="w-full bg-zinc-800 h-2.5 rounded-full overflow-hidden flex">
+              <div
+                className="bg-emerald-500 h-full transition-all duration-500"
+                style={{ width: `${passRate}%` }}
+              />
+              <div
+                className="bg-red-500 h-full transition-all duration-500"
+                style={{ width: `${100 - passRate}%` }}
+              />
             </div>
           </div>
 
@@ -236,7 +267,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
           <div className="flex items-center space-x-2 border-b border-zinc-800 pb-3">
             <button
               onClick={() => setActiveTab('tests')}
-              className={`flex items-center space-x-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              className={`flex items-center space-x-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
                 activeTab === 'tests'
                   ? 'bg-amber-600 text-white shadow'
                   : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
@@ -248,7 +279,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
 
             <button
               onClick={() => setActiveTab('regression')}
-              className={`flex items-center space-x-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              className={`flex items-center space-x-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
                 activeTab === 'regression'
                   ? 'bg-amber-600 text-white shadow'
                   : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
@@ -261,10 +292,10 @@ You have access to tool 'execute_database_query' for querying customer profiles.
 
           {/* TAB 1: TEST CASES TABLE (Baseline + Prompt Injection) */}
           {activeTab === 'tests' && (
-            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 space-y-4">
+            <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100">
+                  <h3 className="text-sm font-bold text-zinc-100">
                     Evaluation Suite Test Results ({evalCases.length} Tests)
                   </h3>
                   <p className="text-xs text-zinc-400">
@@ -282,17 +313,17 @@ You have access to tool 'execute_database_query' for querying customer profiles.
                           {tc.id}
                         </span>
                         {tc.status === 'PASSED' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400 font-mono">
                             <CheckCircle2 className="h-3 w-3" />
                             PASSED
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-[10px] font-bold text-red-400">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-[10px] font-bold text-red-400 font-mono">
                             <XCircle className="h-3 w-3" />
                             FAILED (INJECTION VULNERABLE)
                           </span>
                         )}
-                        <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold uppercase text-zinc-400">
+                        <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-semibold uppercase text-zinc-400">
                           {tc.adversarial_type || tc.category}
                         </span>
                       </div>
@@ -347,21 +378,21 @@ You have access to tool 'execute_database_query' for querying customer profiles.
 
           {/* TAB 2: MODEL VERSION REGRESSION DIFF */}
           {activeTab === 'regression' && (
-            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 space-y-4">
+            <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100">
+                  <h3 className="text-sm font-bold text-zinc-100">
                     Pass/Fail Regression Diff Across Model Versions
                   </h3>
                   <p className="text-xs text-zinc-400">
                     Verifies whether prompt hardening, boundary tokens, or model fine-tuning introduced regressions.
                   </p>
                 </div>
-                <div className="flex items-center space-x-2 text-xs">
-                  <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 font-bold">
+                <div className="flex items-center space-x-2 text-xs font-mono">
+                  <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 font-bold border border-emerald-500/30">
                     +3 Defenses Improved
                   </span>
-                  <span className="rounded bg-zinc-800 text-zinc-400 px-2 py-0.5">
+                  <span className="rounded bg-zinc-800 text-zinc-400 px-2 py-0.5 border border-zinc-700">
                     0 Regressed
                   </span>
                 </div>
@@ -434,7 +465,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
           {/* Fix Prompts */}
           {report.remediation_prompts && report.remediation_prompts.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
+              <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-amber-400" />
                 <span>Defensive System Prompt Guardrail Hardening</span>
               </h3>
@@ -448,7 +479,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
 
           {/* Findings Table */}
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-zinc-200">
+            <h3 className="text-sm font-bold text-zinc-200">
               Vulnerabilities & Security Deficiencies ({report.findings.length})
             </h3>
             <FindingsTable
@@ -471,11 +502,11 @@ You have access to tool 'execute_database_query' for querying customer profiles.
             </button>
 
             <div className="flex items-center space-x-3 border-b border-zinc-800 pb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <Award className="h-5 w-5" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <Award className="h-6 w-6" />
               </div>
               <div>
-                <span className="font-mono text-xs text-amber-400 font-semibold">
+                <span className="font-mono text-xs text-amber-400 font-bold">
                   {signoff.signoffId}
                 </span>
                 <h2 className="text-lg font-bold text-white">
@@ -487,34 +518,34 @@ You have access to tool 'execute_database_query' for querying customer profiles.
             <div className="mt-6 space-y-4 text-xs leading-relaxed text-zinc-300">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
                 <div>
-                  <span className="text-zinc-500 text-[10px] uppercase font-bold">Overall Verdict</span>
-                  <p className="mt-0.5 font-bold text-emerald-400 text-sm">
+                  <span className="text-zinc-500 text-[10px] uppercase font-bold font-mono">Overall Verdict</span>
+                  <p className="mt-0.5 font-bold text-emerald-400 text-sm font-mono">
                     {signoff.overallStatus}
                   </p>
                 </div>
                 <div>
-                  <span className="text-zinc-500 text-[10px] uppercase font-bold">Eval Pass Rate</span>
-                  <p className="mt-0.5 font-bold text-white text-sm">
+                  <span className="text-zinc-500 text-[10px] uppercase font-bold font-mono">Eval Pass Rate</span>
+                  <p className="mt-0.5 font-bold text-white text-sm font-mono">
                     {signoff.passRate}%
                   </p>
                 </div>
                 <div>
-                  <span className="text-zinc-500 text-[10px] uppercase font-bold">Canary Integrity</span>
-                  <p className="mt-0.5 font-bold text-emerald-400 text-sm">
-                    {signoff.canaryIntact ? 'INTACT (UNLEAKED)' : 'LEAKED'}
+                  <span className="text-zinc-500 text-[10px] uppercase font-bold font-mono">Canary Integrity</span>
+                  <p className="mt-0.5 font-bold text-emerald-400 text-sm font-mono">
+                    {signoff.canaryIntact ? 'INTACT' : 'LEAKED'}
                   </p>
                 </div>
                 <div>
-                  <span className="text-zinc-500 text-[10px] uppercase font-bold">Evaluated On</span>
+                  <span className="text-zinc-500 text-[10px] uppercase font-bold font-mono">Evaluated On</span>
                   <p className="mt-0.5 font-mono text-zinc-300 text-xs truncate">
-                    {new Date(signoff.evalDate).toLocaleDateString()}
+                    {signoff.evalDate ? signoff.evalDate.slice(0, 10) : '2026-11-23'}
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-1 rounded-xl border border-zinc-800/80 bg-[#090a0f] p-4 font-mono text-[11px]">
-                <span className="text-zinc-500 uppercase text-[10px]">Auditor Findings & Acceptance Note:</span>
-                <p className="text-zinc-300">{signoff.auditorNotes}</p>
+              <div className="space-y-1.5 rounded-xl border border-zinc-800/80 bg-[#090a0f] p-4 font-mono text-[11px]">
+                <span className="text-zinc-500 uppercase text-[10px] font-bold">Auditor Findings & Acceptance Note:</span>
+                <p className="text-zinc-300 leading-relaxed">{signoff.auditorNotes}</p>
                 <p className="pt-2 text-zinc-500">Evaluated By: {signoff.evaluatedBy}</p>
               </div>
             </div>
@@ -522,14 +553,14 @@ You have access to tool 'execute_database_query' for querying customer profiles.
             <div className="mt-6 flex items-center justify-end space-x-2 pt-4 border-t border-zinc-800">
               <button
                 onClick={() => window.print()}
-                className="flex items-center space-x-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-700"
+                className="flex items-center space-x-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3.5 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 transition"
               >
                 <Printer className="h-3.5 w-3.5" />
                 <span>Print Certificate</span>
               </button>
               <button
                 onClick={() => setShowAcceptanceModal(false)}
-                className="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+                className="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 transition"
               >
                 Done
               </button>

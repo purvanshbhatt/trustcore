@@ -19,15 +19,20 @@ import {
   UploadCloud,
   Check,
   Copy,
+  Terminal,
 } from 'lucide-react';
 import { FindingsTable } from '@/components/FindingsTable';
 import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
+import { LiveScanTerminal } from '@/components/LiveScanTerminal';
+import { CodeDiffPreview } from '@/components/CodeDiffPreview';
 import { ScanInputFile, Report, SourceCitation } from '@/lib/types';
 import { runScan, getSampleData } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
+import { useABExperiment } from '@/lib/abTesting';
 
 export default function LaunchGatePage() {
+  const { remediationFormat, setRemediationFormat } = useABExperiment();
   const [inputMode, setInputMode] = useState<'sample' | 'github' | 'zip' | 'snippet'>('sample');
   const [githubUrl, setGithubUrl] = useState('https://github.com/lovable-dev/saas-starter-template');
   const [githubBranch, setGithubBranch] = useState('main');
@@ -44,6 +49,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
   const [projectName, setProjectName] = useState('Lovable SaaS Starter');
   const [report, setReport] = useState<Report | null>(MOCK_REPORTS.launchgate);
   const [isLoading, setIsLoading] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
 
   // Citation Drawer state
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
@@ -53,6 +59,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
 
   const handleRunScan = async () => {
     setIsLoading(true);
+    setShowTerminal(true);
     try {
       let scanFiles: ScanInputFile[] = [];
 
@@ -64,7 +71,6 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
           },
         ];
       } else if (inputMode === 'github') {
-        // Simulated parsed files from repo
         scanFiles = [
           {
             filename: 'src/lib/api-client.ts',
@@ -72,15 +78,16 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
           },
           {
             filename: '.env.production',
-            content: 'STRIPE_SECRET_KEY=sk_test_51M0CKSTRIPEKEY99283746152433\nNEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=ey...',
+            content:
+              'STRIPE_SECRET_KEY=sk_test_51M0CKSTRIPEKEY99283746152433\nNEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=ey...',
           },
           {
             filename: 'package.json',
-            content: '{\n  "dependencies": {\n    "auth0-next-toolkit": "^1.0.4",\n    "react-domm": "^18.2.0"\n  }\n}',
+            content:
+              '{\n  "dependencies": {\n    "auth0-next-toolkit": "^1.0.4",\n    "react-domm": "^18.2.0"\n  }\n}',
           },
         ];
       } else {
-        // Sample or ZIP mode
         const sample = await getSampleData('launchgate');
         scanFiles = sample.files || [];
       }
@@ -118,22 +125,22 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
         <div>
-          <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+          <div className="flex items-center space-x-2 text-xs font-mono font-semibold uppercase tracking-wider text-blue-400">
             <Rocket className="h-4 w-4" />
             <span>Product 1 of 4 • Pre-Launch Security Gate</span>
           </div>
-          <h1 className="mt-1 text-2xl font-bold text-white">
+          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
             LaunchGate — Pre-Launch Security Gate
           </h1>
-          <p className="mt-1 text-xs text-zinc-400">
-            Automated gate for apps built with Cursor, Lovable, or Replit. Detects leaked secrets, open Supabase/Firebase RLS rules, and hallucinated npm packages.
+          <p className="mt-1 text-xs text-zinc-400 max-w-2xl">
+            Automated compliance gate for apps generated with Cursor, Lovable, or Replit. Detects leaked secrets, open Supabase/Firebase RLS rules, and hallucinated npm packages before deployment.
           </p>
         </div>
 
         {report && (
           <Link
             href={`/reports/${report.id}`}
-            className="flex items-center space-x-1.5 rounded-lg border border-zinc-700 bg-zinc-800/80 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-700 self-start md:self-auto"
+            className="flex items-center space-x-1.5 rounded-xl border border-zinc-700 bg-zinc-800/80 px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition self-start md:self-auto shadow"
           >
             <span>View Full Report</span>
             <ArrowRight className="h-3.5 w-3.5" />
@@ -142,14 +149,14 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
       </div>
 
       {/* Ingestion Tabs */}
-      <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 sm:p-6 space-y-5">
+      <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 sm:p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-zinc-200">
+            <h3 className="text-sm font-bold text-zinc-200">
               Select Ingestion Mode
             </h3>
             <p className="text-xs text-zinc-400">
-              Scan a GitHub repo, upload a Cursor/Lovable ZIP bundle, paste code snippets, or try preloaded test cases.
+              Scan a GitHub repo, upload a Cursor/Lovable ZIP export, paste code snippets, or try preloaded test cases.
             </p>
           </div>
 
@@ -159,12 +166,12 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
               placeholder="Project Name"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              className="rounded-lg border border-zinc-800 bg-[#090a0f] px-3 py-1.5 text-xs text-zinc-200 focus:outline-none"
+              className="rounded-lg border border-zinc-800 bg-[#090a0f] px-3 py-1.5 text-xs text-zinc-200 focus:outline-none font-mono"
             />
             <button
               onClick={handleRunScan}
               disabled={isLoading}
-              className="flex items-center space-x-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-blue-500 disabled:opacity-50"
+              className="flex items-center space-x-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-blue-500 disabled:opacity-50 transition active:scale-[0.98]"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
               <span>{isLoading ? 'Scanning Code...' : 'Run LaunchGate'}</span>
@@ -235,7 +242,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
               </span>
             </div>
             <p className="text-zinc-400 leading-relaxed">
-              Contains hardcoded OpenAI API key in <code className="text-zinc-300">src/lib/api-client.ts</code>, open Supabase RLS policy <code className="text-zinc-300">USING (true)</code> in migration SQL, leaked service role key in <code className="text-zinc-300">.env.production</code>, and hallucinated npm package <code className="text-zinc-300">auth0-next-toolkit</code> in <code className="text-zinc-300">package.json</code>.
+              Contains hardcoded OpenAI API key in <code className="text-zinc-300 font-mono">src/lib/api-client.ts</code>, open Supabase RLS policy <code className="text-zinc-300 font-mono">USING (true)</code> in migration SQL, leaked service role key in <code className="text-zinc-300 font-mono">.env.production</code>, and hallucinated npm package <code className="text-zinc-300 font-mono">auth0-next-toolkit</code> in <code className="text-zinc-300 font-mono">package.json</code>.
             </p>
           </div>
         )}
@@ -252,7 +259,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
                   placeholder="https://github.com/organization/repository"
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] py-2 pl-9 pr-3 text-xs text-zinc-200 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] py-2 pl-9 pr-3 text-xs text-zinc-200 focus:border-blue-500 focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -263,7 +270,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
                 placeholder="main"
                 value={githubBranch}
                 onChange={(e) => setGithubBranch(e.target.value)}
-                className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] py-2 px-3 text-xs text-zinc-200 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] py-2 px-3 text-xs text-zinc-200 focus:border-blue-500 focus:outline-none font-mono"
               />
             </div>
           </div>
@@ -308,18 +315,23 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
         )}
       </div>
 
+      {/* Live Scan Terminal Simulator Widget */}
+      {showTerminal && (
+        <LiveScanTerminal product="LaunchGate" />
+      )}
+
       {/* Severity Summary Cards */}
       {report && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-red-400">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-red-400">
                   Critical
                 </span>
                 <ShieldAlert className="h-4 w-4 text-red-400" />
               </div>
-              <p className="mt-2 text-3xl font-extrabold text-white">
+              <p className="mt-2 text-3xl font-extrabold text-white font-mono">
                 {report.summary.critical_count}
               </p>
               <span className="text-[10px] text-zinc-400">Leaked API keys & open RLS</span>
@@ -327,68 +339,111 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
 
             <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-orange-400">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-orange-400">
                   High Severity
                 </span>
                 <AlertTriangle className="h-4 w-4 text-orange-400" />
               </div>
-              <p className="mt-2 text-3xl font-extrabold text-white">
+              <p className="mt-2 text-3xl font-extrabold text-white font-mono">
                 {report.summary.high_count}
               </p>
               <span className="text-[10px] text-zinc-400">Hallucinated packages</span>
             </div>
 
-            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-4">
+            <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                   Readiness Score
                 </span>
-                <span className="text-xs font-bold text-red-400">BLOCKED</span>
+                <span className="text-xs font-bold text-red-400 font-mono">BLOCKED</span>
               </div>
-              <p className="mt-2 text-3xl font-extrabold text-red-400">
+              <p className="mt-2 text-3xl font-extrabold text-red-400 font-mono">
                 {report.summary.risk_score}<span className="text-base text-zinc-500">/100</span>
               </p>
               <span className="text-[10px] text-zinc-400">Pre-launch gate blocked</span>
             </div>
 
-            <div className="rounded-xl border border-zinc-800 bg-[#101118] p-4">
+            <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                   Total Findings
                 </span>
                 <FileCode className="h-4 w-4 text-blue-400" />
               </div>
-              <p className="mt-2 text-3xl font-extrabold text-zinc-100">
+              <p className="mt-2 text-3xl font-extrabold text-zinc-100 font-mono">
                 {report.summary.total_findings}
               </p>
               <span className="text-[10px] text-zinc-400">Exact source cited</span>
             </div>
           </div>
 
-          {/* One-Click Copy-Paste Fix Prompts for Cursor / Claude */}
-          {report.remediation_prompts && report.remediation_prompts.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-purple-400" />
-                  <span>One-Click Copy Fix Prompts for Cursor / Claude (Engine 2)</span>
-                </h3>
-                <span className="text-xs text-zinc-500">
-                  Click to copy pre-formatted prompt for your AI code editor
+          {/* Remediation Format Experiment Controls & Content */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400">
+                  Engine 2 Remediation Workbench
                 </span>
+                <h3 className="text-sm font-bold text-zinc-100">
+                  {remediationFormat === 'diff_stream'
+                    ? 'Unified Code Diff Remediation Stream'
+                    : 'One-Click Prompt Cards for AI Editors'}
+                </h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {report.remediation_prompts.map((p, idx) => (
-                  <FixPromptCard key={idx} prompt={p} />
-                ))}
+              {/* In-place A/B Experiment Toggle Switcher */}
+              <div className="flex items-center rounded-lg border border-zinc-800 bg-[#090a0f] p-1 text-xs">
+                <button
+                  onClick={() => setRemediationFormat('split_cards')}
+                  className={`rounded-md px-3 py-1 font-medium transition ${
+                    remediationFormat === 'split_cards'
+                      ? 'bg-purple-600 text-white font-semibold shadow'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Prompt Cards
+                </button>
+                <button
+                  onClick={() => setRemediationFormat('diff_stream')}
+                  className={`rounded-md px-3 py-1 font-medium transition ${
+                    remediationFormat === 'diff_stream'
+                      ? 'bg-blue-600 text-white font-semibold shadow'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Diff Stream
+                </button>
               </div>
             </div>
-          )}
+
+            {remediationFormat === 'diff_stream' ? (
+              <div className="space-y-4">
+                <CodeDiffPreview />
+                {report.remediation_prompts && report.remediation_prompts.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    {report.remediation_prompts.map((p, idx) => (
+                      <FixPromptCard key={idx} prompt={p} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {report.remediation_prompts && report.remediation_prompts.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {report.remediation_prompts.map((p, idx) => (
+                      <FixPromptCard key={idx} prompt={p} />
+                    ))}
+                  </div>
+                )}
+                <CodeDiffPreview />
+              </div>
+            )}
+          </div>
 
           {/* Findings Table */}
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-zinc-200">
+            <h3 className="text-sm font-bold text-zinc-200">
               Deterministic Vulnerability Findings ({report.findings.length})
             </h3>
             <FindingsTable

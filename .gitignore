@@ -1,4 +1,5 @@
 # Node & Next.js
+*.tsbuildinfo
 node_modules/
 .next/
 out/
@@ -27,8 +28,10 @@ dist/
 downloads/
 eggs/
 .eggs/
+# Python packaging
 lib/
 lib64/
+!apps/web/src/lib/
 parts/
 sdist/
 var/

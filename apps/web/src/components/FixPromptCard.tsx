@@ -31,50 +31,54 @@ export function FixPromptCard({ prompt }: FixPromptCardProps) {
   };
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-[#111219] p-5 transition-all hover:border-zinc-700">
+    <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 transition-all hover:border-zinc-700 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
         <div className="flex items-center space-x-2">
           <span
-            className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${getToolBadgeColor(
+            className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-mono font-semibold ${getToolBadgeColor(
               prompt.target_tool
             )}`}
           >
             <Sparkles className="mr-1 h-3 w-3" />
             {prompt.target_tool}
           </span>
-          <h4 className="text-sm font-semibold text-zinc-100">{prompt.title}</h4>
+          <h4 className="text-sm font-bold text-zinc-100">{prompt.title}</h4>
         </div>
 
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-1.5 rounded-lg border border-zinc-700 bg-zinc-800/80 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-zinc-700"
+          className="flex items-center space-x-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-700 hover:text-white"
         >
           {copied ? (
             <>
               <Check className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-emerald-400 font-semibold">Copied to Clipboard</span>
+              <span className="text-emerald-400 font-bold">Copied Prompt</span>
             </>
           ) : (
             <>
               <Copy className="h-3.5 w-3.5 text-zinc-400" />
-              <span>Copy Prompt for Editor</span>
+              <span>Copy for AI Editor</span>
             </>
           )}
         </button>
       </div>
 
-      <p className="text-xs text-zinc-400 mb-3">{prompt.description}</p>
+      <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{prompt.description}</p>
 
       {/* Code / Prompt Block */}
-      <div className="relative overflow-hidden rounded-lg border border-zinc-800/80 bg-[#090a0f] p-3.5 font-mono text-xs leading-relaxed text-zinc-300">
+      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-[#08090f] p-3.5 font-mono text-xs leading-relaxed text-zinc-300">
         <pre className="whitespace-pre-wrap font-mono text-[12px]">{prompt.prompt_text}</pre>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-500">
-        <span>Engine 2 LLM Remediation Prompt</span>
-        <span className="flex items-center text-zinc-400 hover:text-zinc-200 cursor-pointer" onClick={handleCopy}>
+      <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+        <span>Engine 2 Remediation Prompt</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center text-zinc-400 hover:text-zinc-200 font-sans cursor-pointer transition"
+        >
           Paste into your AI code editor prompt bar <ArrowRight className="ml-1 h-3 w-3" />
-        </span>
+        </button>
       </div>
     </div>
   );

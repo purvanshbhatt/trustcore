@@ -92,10 +92,10 @@ export function FileDropzone({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all ${
+        className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 transition-all ${
           isDragging
-            ? 'border-blue-500 bg-blue-500/5'
-            : 'border-zinc-800 bg-[#0d0e14]/60 hover:border-zinc-700'
+            ? 'border-blue-500 bg-blue-500/10'
+            : 'border-zinc-800 bg-[#0c0d15] hover:border-zinc-700'
         }`}
       >
         <input
@@ -106,20 +106,20 @@ export function FileDropzone({
           onChange={handleFileInputChange}
         />
 
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-blue-400">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-900 border border-zinc-800 text-blue-400">
           <UploadCloud className="h-6 w-6" />
         </div>
 
-        <h4 className="mt-3 text-sm font-semibold text-zinc-200">
+        <h4 className="mt-3 text-sm font-bold text-zinc-100">
           Drop repo files, configs, or manifests here
         </h4>
-        <p className="mt-1 text-xs text-zinc-500">{acceptLabel}</p>
+        <p className="mt-1 text-xs text-zinc-500 font-mono">{acceptLabel}</p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-zinc-700"
+            className="rounded-xl bg-zinc-800 px-3.5 py-1.5 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-700 hover:text-white"
           >
             Browse Files
           </button>
@@ -127,18 +127,18 @@ export function FileDropzone({
           <button
             type="button"
             onClick={() => setPasteMode(!pasteMode)}
-            className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-zinc-800"
+            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3.5 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
           >
-            <Code2 className="mr-1.5 inline-block h-3.5 w-3.5" />
+            <Code2 className="mr-1.5 inline-block h-3.5 w-3.5 text-blue-400" />
             Paste Code/Config
           </button>
 
           <button
             type="button"
             onClick={onLoadSample}
-            className="flex items-center rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400 transition hover:bg-blue-500/20"
+            className="flex items-center rounded-xl border border-blue-500/30 bg-blue-500/10 px-3.5 py-1.5 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/20"
           >
-            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            <Sparkles className="mr-1.5 h-3.5 w-3.5 text-blue-400" />
             {sampleLabel}
           </button>
         </div>
@@ -146,9 +146,9 @@ export function FileDropzone({
 
       {/* Code Paste Drawer */}
       {pasteMode && (
-        <div className="rounded-xl border border-zinc-800 bg-[#111219] p-4 space-y-3">
+        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-300">
+            <span className="text-xs font-bold text-zinc-200">
               Paste Code, SQL, Policy, or Config
             </span>
             <input
@@ -156,7 +156,7 @@ export function FileDropzone({
               placeholder="Filename, e.g. schema.sql"
               value={pasteFilename}
               onChange={(e) => setPasteFilename(e.target.value)}
-              className="rounded border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-200 focus:outline-none"
+              className="rounded-lg border border-zinc-800 bg-[#090a0f] px-2.5 py-1 font-mono text-xs text-zinc-200 focus:outline-none"
             />
           </div>
           <textarea
@@ -164,18 +164,18 @@ export function FileDropzone({
             placeholder="Paste code or config text..."
             value={pasteContent}
             onChange={(e) => setPasteContent(e.target.value)}
-            className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] p-3 font-mono text-xs text-zinc-200 focus:border-blue-500 focus:outline-none"
+            className="w-full rounded-xl border border-zinc-800 bg-[#08090f] p-3 font-mono text-xs text-zinc-200 focus:border-blue-500 focus:outline-none leading-relaxed"
           />
           <div className="flex justify-end space-x-2">
             <button
               onClick={() => setPasteMode(false)}
-              className="rounded px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200"
+              className="rounded-lg px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
             >
               Cancel
             </button>
             <button
               onClick={handleAddPastedSnippet}
-              className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500"
+              className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 shadow"
             >
               Add Snippet
             </button>
@@ -185,14 +185,14 @@ export function FileDropzone({
 
       {/* Selected Files Chips/List */}
       {files.length > 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-[#0e0f16] p-4">
+        <div className="rounded-xl border border-zinc-800 bg-[#0e0f17] p-4">
           <div className="flex items-center justify-between pb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
               Staged Inputs ({files.length})
             </span>
             <button
               onClick={() => onFilesChange([])}
-              className="text-xs text-zinc-500 hover:text-red-400"
+              className="text-xs text-zinc-500 hover:text-red-400 transition"
             >
               Clear All
             </button>
@@ -202,7 +202,7 @@ export function FileDropzone({
             {files.map((file, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/60 px-3 py-2 text-xs"
+                className="flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-3 py-2 text-xs"
               >
                 <div className="flex items-center space-x-2 min-w-0">
                   <File className="h-4 w-4 shrink-0 text-blue-400" />
@@ -212,7 +212,7 @@ export function FileDropzone({
                 </div>
                 <button
                   onClick={() => handleRemoveFile(idx)}
-                  className="ml-2 text-zinc-500 hover:text-red-400"
+                  className="ml-2 text-zinc-500 hover:text-red-400 transition"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

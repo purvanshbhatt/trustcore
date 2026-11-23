@@ -18,12 +18,14 @@ import {
   CheckSquare,
   Copy,
   Check,
+  FileCode,
 } from 'lucide-react';
 import { Report, SourceCitation } from '@/lib/types';
 import { getReport } from '@/lib/api';
 import { FindingsTable } from '@/components/FindingsTable';
 import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
+import { SecurityGauge } from '@/components/SecurityGauge';
 import { MOCK_REPORTS } from '@/lib/mockData';
 
 export default function ReportViewerPage() {
@@ -47,7 +49,6 @@ export default function ReportViewerPage() {
         const rep = await getReport(reportId);
         setReport(rep);
       } catch {
-        // Fallback to default mock
         setReport(MOCK_REPORTS.launchgate);
       } finally {
         setLoading(false);
@@ -142,9 +143,9 @@ export default function ReportViewerPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent mx-auto" />
-          <p className="text-xs text-zinc-400">Loading verifiable report...</p>
+        <div className="text-center space-y-3">
+          <div className="h-9 w-9 animate-spin rounded-full border-2 border-blue-500 border-t-transparent mx-auto" />
+          <p className="text-xs text-zinc-400 font-mono">Loading verifiable report...</p>
         </div>
       </div>
     );
@@ -152,10 +153,10 @@ export default function ReportViewerPage() {
 
   if (!report) {
     return (
-      <div className="p-8 text-center">
+      <div className="p-8 text-center space-y-3">
         <h3 className="text-base font-semibold text-zinc-200">Report Not Found</h3>
-        <Link href="/" className="mt-4 inline-block text-xs text-blue-400 hover:underline">
-          Return to Hub
+        <Link href="/" className="inline-block text-xs text-blue-400 hover:underline">
+          Return to Overview Hub
         </Link>
       </div>
     );
@@ -167,16 +168,16 @@ export default function ReportViewerPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4 print:hidden">
         <Link
           href={`/${report.product}`}
-          className="inline-flex items-center space-x-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+          className="inline-flex items-center space-x-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Back to {report.product.toUpperCase()}</span>
+          <span className="font-mono">Back to {report.product.toUpperCase()}</span>
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleShareLink}
-            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
           >
             {copiedLink ? (
               <>
@@ -193,7 +194,7 @@ export default function ReportViewerPage() {
 
           <button
             onClick={handleExportMarkdown}
-            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
           >
             <Download className="h-3.5 w-3.5" />
             <span>Export Markdown</span>
@@ -201,7 +202,7 @@ export default function ReportViewerPage() {
 
           <button
             onClick={handleExportJSON}
-            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
           >
             <FileText className="h-3.5 w-3.5" />
             <span>Export JSON</span>
@@ -209,7 +210,7 @@ export default function ReportViewerPage() {
 
           <button
             onClick={handlePrint}
-            className="flex items-center space-x-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 shadow"
+            className="flex items-center space-x-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 shadow transition"
           >
             <Printer className="h-3.5 w-3.5" />
             <span>Print / PDF</span>
@@ -220,20 +221,20 @@ export default function ReportViewerPage() {
       {/* Report Header */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-mono text-zinc-500">{report.id}</span>
+          <span className="font-mono text-zinc-400">{report.id}</span>
           <span className="text-zinc-600">•</span>
-          <span className="uppercase text-blue-400 font-semibold">{report.product}</span>
+          <span className="uppercase text-blue-400 font-mono font-bold tracking-wider">{report.product}</span>
           <span className="text-zinc-600">•</span>
-          <span className="text-zinc-400">
+          <span className="text-zinc-500 font-mono">
             {new Date(report.created_at).toLocaleString()}
           </span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           {report.title}
         </h1>
       </div>
 
-      {/* Readiness Status Banner */}
+      {/* Readiness Status Banner with Security Gauge */}
       <div
         className={`rounded-2xl border p-6 ${
           report.summary.readiness_status === 'BLOCKED'
@@ -243,63 +244,53 @@ export default function ReportViewerPage() {
             : 'border-emerald-500/30 bg-emerald-500/5'
         }`}
       >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center space-x-5">
-            <div
-              className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl font-extrabold text-2xl ${
-                report.summary.readiness_status === 'BLOCKED'
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                  : report.summary.readiness_status === 'WARNING'
-                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-              }`}
-            >
-              {report.summary.risk_score}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          <div className="md:col-span-8 space-y-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                Overall Readiness Gate:
+              </span>
+              <span
+                className={`font-extrabold font-mono text-sm px-2 py-0.5 rounded ${
+                  report.summary.readiness_status === 'BLOCKED'
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    : report.summary.readiness_status === 'WARNING'
+                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                }`}
+              >
+                {report.summary.readiness_status}
+              </span>
             </div>
+            <p className="text-xs text-zinc-300 leading-relaxed max-w-xl">
+              Deterministic findings computed by TrustCore Engine 1 with exact file and line references. Zero fabricated compliance evidence.
+            </p>
 
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Overall Readiness Gate:
-                </span>
-                <span
-                  className={`font-extrabold text-base ${
-                    report.summary.readiness_status === 'BLOCKED'
-                      ? 'text-red-400'
-                      : report.summary.readiness_status === 'WARNING'
-                      ? 'text-yellow-400'
-                      : 'text-emerald-400'
-                  }`}
-                >
-                  {report.summary.readiness_status}
-                </span>
+            <div className="grid grid-cols-3 gap-4 pt-3 text-center border-t border-zinc-800/80 max-w-md">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono">Critical</span>
+                <p className="text-xl font-bold text-red-400 font-mono">{report.summary.critical_count}</p>
               </div>
-              <p className="mt-1 text-xs text-zinc-400">
-                Deterministic findings computed by TrustCore Engine 1. Zero fabricated compliance evidence.
-              </p>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono">High</span>
+                <p className="text-xl font-bold text-orange-400 font-mono">{report.summary.high_count}</p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono">Total</span>
+                <p className="text-xl font-bold text-zinc-200 font-mono">{report.summary.total_findings}</p>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 border-t md:border-t-0 md:border-l border-zinc-800/80 pt-4 md:pt-0 md:pl-6 text-center">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-zinc-500">Critical</span>
-              <p className="text-xl font-bold text-red-400">{report.summary.critical_count}</p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-zinc-500">High</span>
-              <p className="text-xl font-bold text-orange-400">{report.summary.high_count}</p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-zinc-500">Total</span>
-              <p className="text-xl font-bold text-zinc-200">{report.summary.total_findings}</p>
-            </div>
+          <div className="md:col-span-4 flex justify-center">
+            <SecurityGauge score={report.summary.risk_score} label="Readiness Score" size="sm" showSimulator={false} />
           </div>
         </div>
       </div>
 
       {/* Executive Summary (Engine 2 LLM Layer) */}
-      <div className="rounded-xl border border-zinc-800 bg-[#101118] p-6 space-y-2">
-        <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+      <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-6 space-y-2">
+        <div className="flex items-center space-x-2 text-xs font-mono font-bold uppercase tracking-wider text-blue-400">
           <Sparkles className="h-4 w-4" />
           <span>Executive Summary & Risk Narrative (Engine 2 LLM Layer)</span>
         </div>
@@ -331,7 +322,7 @@ export default function ReportViewerPage() {
 
       {/* Specialized View: AgentScope Permission Diff */}
       {report.permission_diff && report.permission_diff.length > 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 space-y-3">
+        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-3">
           <h3 className="text-sm font-bold text-zinc-200 flex items-center space-x-2">
             <GitCompare className="h-4 w-4 text-purple-400" />
             <span>AgentScope Least-Privilege Diff Audit</span>
@@ -355,7 +346,7 @@ export default function ReportViewerPage() {
                     <td className="py-2.5 px-3 text-red-400 bg-red-500/5">{String(item.before_value)}</td>
                     <td className="py-2.5 px-3 text-emerald-400 bg-emerald-500/5">{String(item.after_value)}</td>
                     <td className="py-2.5 px-3">
-                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300 font-bold">
                         {item.action}
                       </span>
                     </td>
@@ -370,7 +361,7 @@ export default function ReportViewerPage() {
 
       {/* Specialized View: Evidence-to-Answer Matrix */}
       {report.evidence_matrix && report.evidence_matrix.length > 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 space-y-3">
+        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-3">
           <h3 className="text-sm font-bold text-zinc-200 flex items-center space-x-2">
             <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
             <span>Verified Evidence & Gap Matrix</span>
@@ -382,7 +373,7 @@ export default function ReportViewerPage() {
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-blue-400">{item.question_id}</span>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold font-mono ${
                       item.status === 'VERIFIED_EVIDENCE'
                         ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                         : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
@@ -391,7 +382,7 @@ export default function ReportViewerPage() {
                     {item.status}
                   </span>
                 </div>
-                <p className="font-medium text-zinc-200">{item.question}</p>
+                <p className="font-semibold text-zinc-200">{item.question}</p>
                 <p className="text-zinc-400 leading-relaxed">{item.answer}</p>
               </div>
             ))}
@@ -401,7 +392,7 @@ export default function ReportViewerPage() {
 
       {/* Specialized View: EvalKit Results */}
       {report.eval_results && report.eval_results.length > 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-[#101118] p-5 space-y-3">
+        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-3">
           <h3 className="text-sm font-bold text-zinc-200 flex items-center space-x-2">
             <CheckSquare className="h-4 w-4 text-amber-400" />
             <span>Adversarial Eval Test Matrix</span>
@@ -414,7 +405,7 @@ export default function ReportViewerPage() {
                   <div className="flex items-center space-x-2">
                     <span className="font-mono font-bold text-zinc-400">{tc.id}</span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold font-mono ${
                         tc.status === 'PASSED'
                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                           : 'bg-red-500/10 text-red-400 border border-red-500/30'
@@ -441,7 +432,7 @@ export default function ReportViewerPage() {
           <h2 className="text-base font-bold text-zinc-100">
             Deterministic Source-Cited Findings ({report.findings.length})
           </h2>
-          <span className="text-xs text-zinc-500">Click any row to view exact evidence snippet</span>
+          <span className="text-xs text-zinc-500 font-mono">Click row to open exact snippet</span>
         </div>
 
         <FindingsTable
