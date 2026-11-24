@@ -11,7 +11,10 @@ from app.core.schemas import (
     Severity
 )
 from app.core.storage import get_storage
+from app.core.entitlements import ScanAccess
 from app.core.explainer import LLMExplainer
+from app.core.preview import build_preview
+from app.core.redaction import redact_report
 from app.rules.base import BaseRulePack
 from app.rules.launchgate import LaunchGateRulePack
 from app.rules.agentscope import AgentScopeRulePack
@@ -28,7 +31,7 @@ class TrustCoreEngine:
     - Step 2: Route to deterministic RulePack (Engine 1)
     - Step 3: Compute deterministic findings, citations, metrics, and risk scores
     - Step 4: Route findings to LLM Explainer (Engine 2) for plain-English synthesis & prompts
-    - Step 5: Store report & return structured JSON
+    - Step 5: Redact secrets, store the report for its owner (unless ephemeral) & return structured JSON
     """
 
     def __init__(self):
@@ -41,8 +44,25 @@ class TrustCoreEngine:
         self.explainer = LLMExplainer()
         self.storage = get_storage()
 
-    def run_scan(self, req: ScanRequest) -> Report:
-        logger.info(f"[Engine] Starting scan for product={req.product.value}, project={req.project_name}")
+    def run_scan(
+        self,
+        req: ScanRequest,
+        user_id: str,
+        *,
+        access: ScanAccess = ScanAccess.FULL,
+        persist: bool = True
+    ) -> Report:
+        """Run a scan for ``user_id``.
+
+        Args:
+            access: ``FULL`` returns the complete report; ``PREVIEW`` returns the free
+                preview (score, counts, top findings without citations or fix prompts).
+            persist: Store the returned report for ``user_id``. Signed-out visitors
+                have no account, so their reports are never stored. ``req.ephemeral``
+                (Zero-Retention Mode) also disables storage.
+        """
+        # Product only: project names and file contents are user data and are never logged.
+        logger.info("[Engine] Starting scan for product=%s ephemeral=%s", req.product.value, req.ephemeral)
 
         rule_pack = self.rule_packs.get(req.product)
         if not rule_pack:
@@ -89,15 +109,26 @@ class TrustCoreEngine:
         )
 
         # ENGINE 2: LLM Explanation Layer (Strictly takes verified findings, never hallucinates)
-        exec_summary, remediation_prompts = self.explainer.explain(
+        # The live model is only consulted for full, stored reports: zero-retention scans
+        # stay inside this process, and free previews never spend model tokens.
+        stored = persist and not req.ephemeral
+        explanation = self.explainer.explain(
             product=req.product,
             summary=summary,
             findings=findings,
-            metadata=rule_result.metadata
+            metadata=rule_result.metadata,
+            allow_llm=access is ScanAccess.FULL and not req.ephemeral
         )
+        exec_summary, remediation_prompts = explanation.executive_summary, explanation.remediation_prompts
+        explainer_info = {"provider": explanation.provider}
+        if explanation.model:
+            explainer_info["model"] = explanation.model
+        if explanation.fallback_reason:
+            explainer_info["fallback_reason"] = explanation.fallback_reason
 
         # Build full report
-        report_id = f"rpt_{req.product.value[:3]}_{uuid.uuid4().hex[:8]}"
+        # 96 random bits: unguessable and collision-free across users.
+        report_id = f"rpt_{req.product.value[:3]}_{uuid.uuid4().hex[:24]}"
         created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
         report = Report(
@@ -115,13 +146,26 @@ class TrustCoreEngine:
             metadata={
                 **rule_result.metadata,
                 "project_name": req.project_name,
-                "engine_version": "1.0.0-dual-core"
+                "engine_version": "1.0.0-dual-core",
+                "ephemeral": not stored,
+                "access": access.value,
+                "explainer": explainer_info
             }
         )
 
-        # Save report
-        self.storage.save_report(report)
-        logger.info(f"[Engine] Scan completed successfully. Report ID: {report.id}")
+        # Defence in depth: no live credential may leave the engine, whether returned or stored.
+        redact_report(report)
+
+        if access is ScanAccess.PREVIEW:
+            # Cut on the server so locked content never reaches an unpaid client.
+            report = build_preview(report)
+
+        if stored:
+            self.storage.save_report(report, user_id)
+            logger.info("[Engine] Scan completed successfully. Report ID: %s (%s)", report.id, access.value)
+        else:
+            # Zero-Retention Mode or a signed-out visitor: nothing is written anywhere.
+            logger.info("[Engine] Scan completed; report %s was not persisted (%s)", report.id, access.value)
         return report
 
 

@@ -28,12 +28,22 @@ import { FindingsTable } from '@/components/FindingsTable';
 import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
 import { BlastRadiusSimulator } from '@/components/BlastRadiusSimulator';
-import { ScanInputFile, Report, SourceCitation, MCPToolPermission } from '@/lib/types';
-import { runScan, getSampleData } from '@/lib/api';
+import { FileDropzone } from '@/components/FileDropzone';
+import { ZeroRetentionToggle } from '@/components/ZeroRetentionToggle';
+import { ReportFlags, isEphemeralReport } from '@/components/ReportFlags';
+import { ApiErrorNotice } from '@/components/ApiErrorNotice';
+import { PreviewLockedPanel, LockedPlaceholder } from '@/components/PreviewLock';
+import { IllustrativeExample, EmptyReportState } from '@/components/DemoNotice';
+import { ScanInputFile, Report, SourceCitation, MCPToolPermission, isPreviewReport, isCitationLocked } from '@/lib/types';
+import { runScan, getSampleData, isMockEnabled, isDemoReport, toUiError, type UiError } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
+import { useBilling } from '@/lib/billing';
 
 export default function AgentScopePage() {
-  const [activeTab, setActiveTab] = useState<'matrix' | 'diff' | 'simulator'>('simulator');
+  // The simulator is a fixed illustration, so live mode opens on the scan-driven diff instead.
+  const [activeTab, setActiveTab] = useState<'matrix' | 'diff' | 'simulator'>(
+    isMockEnabled() ? 'simulator' : 'diff'
+  );
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [mcpJsonContent, setMcpJsonContent] = useState(`{
   "mcpServers": {
@@ -55,9 +65,14 @@ export default function AgentScopePage() {
 }`);
 
   const [projectName, setProjectName] = useState('Claude Desktop MCP Config');
-  const [report, setReport] = useState<Report | null>(MOCK_REPORTS.agentscope);
+  // Live mode starts empty: the demo report is preloaded only when NEXT_PUBLIC_USE_MOCK=true.
+  const [report, setReport] = useState<Report | null>(isMockEnabled() ? MOCK_REPORTS.agentscope : null);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedDiff, setCopiedDiff] = useState(false);
+  const { refresh: refreshBilling } = useBilling();
+  const [stagedFiles, setStagedFiles] = useState<ScanInputFile[]>([]);
+  const [ephemeral, setEphemeral] = useState(false);
+  const [scanError, setScanError] = useState<UiError | null>(null);
 
   // Citation Drawer state
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
@@ -67,35 +82,46 @@ export default function AgentScopePage() {
 
   const handleRunScan = async () => {
     setIsLoading(true);
+    setScanError(null);
     try {
+      // Uploaded configs take precedence over the editor content.
+      const scanFiles: ScanInputFile[] =
+        stagedFiles.length > 0
+          ? stagedFiles
+          : [
+              {
+                filename: 'claude_desktop_config.json',
+                content: mcpJsonContent,
+              },
+            ];
       const res = await runScan({
         product: 'agentscope',
         project_name: projectName,
-        files: [
-          {
-            filename: 'claude_desktop_config.json',
-            content: mcpJsonContent,
-          },
-        ],
+        files: scanFiles,
+        ephemeral,
       });
       setReport(res);
     } catch (err) {
       console.error('Scan failed:', err);
+      setScanError(toUiError(err));
     } finally {
       setIsLoading(false);
+      // A scan spends a credit or the free preview: re-read the plan.
+      void refreshBilling();
     }
   };
 
   const handleLoadSample = async () => {
     setIsLoading(true);
+    setScanError(null);
     try {
       const sample = await getSampleData('agentscope');
       setProjectName(sample.project_name || 'Claude Desktop & Agent Workstation Config');
       if (sample.files && sample.files[0]) {
         setMcpJsonContent(sample.files[0].content);
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      setScanError(toUiError(err));
     } finally {
       setIsLoading(false);
     }
@@ -145,8 +171,19 @@ export default function AgentScopePage() {
     URL.revokeObjectURL(url);
   };
 
-  const permissionsMatrix: MCPToolPermission[] =
-    report?.permissions_matrix || MOCK_REPORTS.agentscope.permissions_matrix || [];
+  // Only what the scan returned: no sample matrix is substituted when the report has none.
+  const permissionsMatrix: MCPToolPermission[] = report?.permissions_matrix ?? [];
+  const preview = isPreviewReport(report);
+  // Fixed built-in widgets are only "the result" for demo data; on a live report they are labelled examples.
+  const isDemo = report !== null && isDemoReport(report);
+  // Plaintext-credential alert comes from the scan's own AS-KEY-001 finding.
+  const plaintextKeyFinding = report?.findings.find((finding) => finding.rule_id === 'AS-KEY-001') ?? null;
+  const readinessTone =
+    report?.summary.readiness_status === 'PASSED'
+      ? 'text-emerald-400'
+      : report?.summary.readiness_status === 'WARNING'
+      ? 'text-yellow-400'
+      : 'text-red-400';
 
   const filteredMatrix = permissionsMatrix.filter(
     (tool) => categoryFilter === 'ALL' || tool.category === categoryFilter
@@ -184,7 +221,7 @@ export default function AgentScopePage() {
           </p>
         </div>
 
-        {report && (
+        {report && !isEphemeralReport(report) && (
           <Link
             href={`/reports/${report.id}`}
             className="flex items-center space-x-1.5 rounded-xl border border-zinc-700 bg-zinc-800/80 px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition self-start md:self-auto shadow"
@@ -207,7 +244,8 @@ export default function AgentScopePage() {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ZeroRetentionToggle enabled={ephemeral} onChange={setEphemeral} disabled={isLoading} />
             <button
               onClick={handleLoadSample}
               className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition"
@@ -238,34 +276,68 @@ export default function AgentScopePage() {
             className="w-full rounded-xl border border-zinc-800 bg-[#090a0f] p-3 font-mono text-xs text-zinc-200 focus:border-purple-500 focus:outline-none leading-relaxed"
           />
         </div>
+
+        {/* Real ingestion: uploaded MCP / agent configs take precedence over the editor */}
+        <FileDropzone
+          files={stagedFiles}
+          onFilesChange={setStagedFiles}
+          product="agentscope"
+          accept=".json,.yaml,.yml"
+          title="Or drop MCP / agent config files here"
+          acceptLabel="Supported: .json, .yaml, .yml (max 15 MB) • staged files are audited instead of the editor"
+        />
+
+        {/* Failures surface here with Retry, never as sample data */}
+        <ApiErrorNotice
+          error={scanError}
+          onRetry={scanError !== null && scanError.status !== null ? handleRunScan : undefined}
+        />
       </div>
 
-      {/* Plaintext Secret Alerts Banner */}
-      <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4">
-        <div className="flex items-start space-x-3">
-          <div className="rounded-lg bg-red-500/20 p-2 text-red-400">
-            <KeyRound className="h-5 w-5" />
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-sm text-red-200">
-                Plaintext Secret Alert: Hardcoded API Key in MCP Environment Block
-              </span>
-              <span className="rounded bg-red-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-red-300 border border-red-500/40">
-                CRITICAL EXPOSURE
-              </span>
+      {/* Plaintext Secret Alert: shown only when this scan reported an AS-KEY-001 finding */}
+      {plaintextKeyFinding && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4">
+          <div className="flex items-start space-x-3">
+            <div className="rounded-lg bg-red-500/20 p-2 text-red-400">
+              <KeyRound className="h-5 w-5" />
             </div>
-            <p className="text-xs text-zinc-300 leading-relaxed">
-              Detected <code className="text-red-300 font-mono font-bold">ANTHROPIC_API_KEY: &quot;sk-ant-live-secret-prod-token-9988223344&quot;</code> embedded in plain text inside <code className="text-zinc-300 font-mono">claude_desktop_config.json</code>.
-              Anyone with access to dotfiles or synced git repositories can extract this credential.
-            </p>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-sm text-red-200">
+                  Plaintext Secret Alert: {plaintextKeyFinding.title}
+                </span>
+                <span className="rounded bg-red-500/30 px-2 py-0.5 text-[10px] font-mono font-bold text-red-300 border border-red-500/40">
+                  {plaintextKeyFinding.severity} EXPOSURE
+                </span>
+              </div>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                {isCitationLocked(plaintextKeyFinding.citation) ? (
+                  <>Detected a credential embedded in plain text inside </>
+                ) : (
+                  <>
+                    Detected{' '}
+                    <code className="text-red-300 font-mono font-bold">{plaintextKeyFinding.citation.snippet}</code>{' '}
+                    embedded in plain text inside{' '}
+                  </>
+                )}
+                <code className="text-zinc-300 font-mono">{plaintextKeyFinding.citation.file_path}</code>.
+                Anyone with access to dotfiles or synced git repositories can extract this credential.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {!report && !isLoading && (
+        <EmptyReportState description="Paste or upload an MCP / agent config above and run the audit. Results from your own config appear here; no sample results are shown." />
+      )}
 
       {/* Main Analysis View: Tabs for Simulator vs Matrix vs Diff */}
       {report && (
         <div className="space-y-6">
+          <ReportFlags report={report} />
+          {preview && <PreviewLockedPanel report={report} />}
+
           {/* Top Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-5">
@@ -273,7 +345,7 @@ export default function AgentScopePage() {
                 Blast Radius Reduction
               </span>
               <p className="mt-1 text-3xl font-extrabold text-white font-mono">
-                -{report.metadata?.blast_radius_reduction_pct || 78}%
+                -{typeof report.metadata?.blast_radius_reduction_pct === 'number' ? report.metadata.blast_radius_reduction_pct : 0}%
               </p>
               <p className="mt-1 text-xs text-zinc-400">
                 Scoping filesystem mounts & removing wildcard execution.
@@ -284,11 +356,12 @@ export default function AgentScopePage() {
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                 Readiness Status
               </span>
-              <p className="mt-1 text-2xl font-extrabold text-red-400 font-mono">
+              <p className={`mt-1 text-2xl font-extrabold font-mono ${readinessTone}`}>
                 {report.summary.readiness_status}
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                Requires least-privilege scoping before agent launch.
+                Readiness score {report.summary.risk_score}/100 across {report.summary.total_findings} finding
+                {report.summary.total_findings === 1 ? '' : 's'}.
               </p>
             </div>
 
@@ -345,12 +418,29 @@ export default function AgentScopePage() {
           </div>
 
           {/* TAB 0: INTERACTIVE BLAST RADIUS SIMULATOR */}
-          {activeTab === 'simulator' && (
-            <BlastRadiusSimulator />
-          )}
+          {activeTab === 'simulator' &&
+            (isDemo ? (
+              <BlastRadiusSimulator />
+            ) : (
+              // The simulator plays one fixed scenario; it is not computed from the uploaded config.
+              <IllustrativeExample>
+                <BlastRadiusSimulator />
+              </IllustrativeExample>
+            ))}
 
           {/* TAB 1: VISUAL PERMISSIONS MATRIX (Read / Write / Destructive / Network) */}
-          {activeTab === 'matrix' && (
+          {activeTab === 'matrix' && preview && (
+            <LockedPlaceholder
+              title="Permissions matrix"
+              description="The per-tool permissions matrix comes with the full report."
+            />
+          )}
+          {activeTab === 'matrix' && !preview && permissionsMatrix.length === 0 && (
+            <div className="rounded-xl border border-dashed border-zinc-800 bg-[#0d0e14] p-6 text-center text-xs text-zinc-500">
+              This scan did not return a per-tool permissions matrix. See the Before / After Permission Diff and the findings below.
+            </div>
+          )}
+          {activeTab === 'matrix' && !preview && permissionsMatrix.length > 0 && (
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
                 <div>
@@ -438,7 +528,13 @@ export default function AgentScopePage() {
           )}
 
           {/* TAB 2: BEFORE / AFTER PERMISSION DIFF */}
-          {activeTab === 'diff' && report.permission_diff && (
+          {activeTab === 'diff' && preview && (
+            <LockedPlaceholder
+              title="Permission diff"
+              description="The before / after least-privilege diff comes with the full report."
+            />
+          )}
+          {activeTab === 'diff' && !preview && report.permission_diff && (
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
                 <div>
@@ -450,6 +546,8 @@ export default function AgentScopePage() {
                   </p>
                 </div>
 
+                {/* The "recommended config" is a fixed hardened sample, so it is only offered with demo data */}
+                {isDemo && (
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={handleDownloadCleanConfig}
@@ -476,6 +574,7 @@ export default function AgentScopePage() {
                     )}
                   </button>
                 </div>
+                )}
               </div>
 
               {/* Diff Table */}
@@ -519,6 +618,12 @@ export default function AgentScopePage() {
           )}
 
           {/* Fix Prompts */}
+          {preview && (
+            <LockedPlaceholder
+              title="Fix prompts"
+              description="Copy-paste least-privilege remediation prompts come with the full report."
+            />
+          )}
           {report.remediation_prompts && report.remediation_prompts.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-1.5">
@@ -536,7 +641,8 @@ export default function AgentScopePage() {
           {/* Findings Table */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-zinc-200">
-              Identified MCP Permission Findings ({report.findings.length})
+              Identified MCP Permission Findings (
+              {preview ? `top ${report.findings.length} of ${report.summary.total_findings}` : report.findings.length})
             </h3>
             <FindingsTable
               findings={report.findings}

@@ -1,5 +1,9 @@
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query, Request, Response, status
+from app.core.auth import AuthenticatedUser, get_caller, get_current_user
+from app.core.billing import BillingService, get_billing_service
+from app.core.entitlements import PaymentRequired
+from app.core.ratelimit import SCAN_SCOPE, limiter, scan_limit
 from app.core.schemas import ProductType, ScanRequest, Report, ScanInputFile
 from app.core.engine import get_engine, TrustCoreEngine
 from app.core.storage import get_storage, BaseReportStorage
@@ -139,38 +143,79 @@ You have access to tool 'execute_database_query' for querying customer profiles.
 
 
 @router.post("/run/{product}", response_model=Report)
+@limiter.shared_limit(scan_limit, scope=SCAN_SCOPE)
 def run_product_scan(
+    request: Request,
     product: ProductType,
-    request: ScanRequest,
-    engine: TrustCoreEngine = Depends(get_engine)
+    scan_request: ScanRequest,
+    user: AuthenticatedUser = Depends(get_caller),
+    engine: TrustCoreEngine = Depends(get_engine),
+    billing: BillingService = Depends(get_billing_service)
 ):
     """
     Execute unified dual-engine scan for a specific product.
     Engine 1 evaluates deterministic rules; Engine 2 synthesizes plain-English explanations.
+
+    Freemium gate: a subscription or a scan credit returns the full report
+    (`metadata.access = "full"`). Otherwise the caller, signed in or not, gets one free
+    preview (`"preview"`: overall score, counts, and the top 2 findings without citations
+    or fix prompts), after which the route answers `402 Payment Required`.
+
+    Reports are stored for signed-in callers. With `ephemeral: true` (Zero-Retention Mode),
+    and for signed-out visitors, the scan runs in memory and nothing is persisted.
     """
-    request.product = product
-    return engine.run_scan(request)
+    scan_request.product = product
+    try:
+        grant = billing.authorize_scan(user)
+    except PaymentRequired as exc:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Your free preview has been used. Purchase a scan or subscribe to run full scans.",
+        ) from exc
+    try:
+        return engine.run_scan(
+            scan_request, user_id=user.id, access=grant.access, persist=not user.is_anonymous
+        )
+    except Exception:
+        # The caller got no report: give back the credit or preview that was spent.
+        billing.refund(grant)
+        raise
 
 
 @router.get("/reports/{report_id}", response_model=Report)
 def get_report(
     report_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
     storage: BaseReportStorage = Depends(get_storage)
 ):
-    """Retrieve a previously generated scan report by its unique ID."""
-    report = storage.get_report(report_id)
+    """Retrieve one of the caller's scan reports by its unique ID."""
+    # Missing and not-owned are indistinguishable so report IDs cannot be probed.
+    report = storage.get_report(report_id, user.id)
     if not report:
-        raise HTTPException(status_code=404, detail=f"Report {report_id} not found.")
+        raise HTTPException(status_code=404, detail="Report not found.")
     return report
 
 
 @router.get("/reports", response_model=List[Report])
 def list_reports(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=100),
+    user: AuthenticatedUser = Depends(get_current_user),
     storage: BaseReportStorage = Depends(get_storage)
 ):
-    """List recent scan reports."""
-    return storage.list_reports(limit=limit)
+    """List the caller's recent scan reports."""
+    return storage.list_reports(user.id, limit=limit)
+
+
+@router.delete("/reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_report(
+    report_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    storage: BaseReportStorage = Depends(get_storage)
+):
+    """Permanently delete one of the caller's scan reports."""
+    if not storage.delete_report(report_id, user.id):
+        raise HTTPException(status_code=404, detail="Report not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/samples/{product}")

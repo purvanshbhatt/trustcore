@@ -9,8 +9,9 @@ import {
   Search,
   Filter,
   CheckCircle,
+  Lock,
 } from 'lucide-react';
-import { Finding, Severity, SourceCitation } from '@/lib/types';
+import { Finding, Severity, SourceCitation, isCitationLocked } from '@/lib/types';
 
 interface FindingsTableProps {
   findings: Finding[];
@@ -146,20 +147,30 @@ export function FindingsTable({ findings, onSelectCitation }: FindingsTableProps
                   </div>
                 </div>
 
-                {/* Citation Drawer Trigger */}
-                <button
-                  onClick={() =>
-                    onSelectCitation(
-                      finding.citation,
-                      finding.rule_id,
-                      finding.title
-                    )
-                  }
-                  className="flex shrink-0 items-center space-x-1.5 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
-                >
-                  <span>View Evidence Citation</span>
-                  <ExternalLink className="h-3.5 w-3.5 text-zinc-400" />
-                </button>
+                {/* Citation Drawer Trigger (locked when a preview report withholds the exact source) */}
+                {isCitationLocked(finding.citation) ? (
+                  <span
+                    title="Exact source citations unlock with the full report"
+                    className="flex shrink-0 cursor-not-allowed items-center space-x-1.5 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-xs font-semibold text-zinc-500"
+                  >
+                    <Lock className="h-3.5 w-3.5" />
+                    <span>Citation locked</span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() =>
+                      onSelectCitation(
+                        finding.citation,
+                        finding.rule_id,
+                        finding.title
+                      )
+                    }
+                    className="flex shrink-0 items-center space-x-1.5 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
+                  >
+                    <span>View Evidence Citation</span>
+                    <ExternalLink className="h-3.5 w-3.5 text-zinc-400" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

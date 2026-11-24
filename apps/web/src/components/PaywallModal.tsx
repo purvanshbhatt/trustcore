@@ -1,40 +1,65 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, Check, Zap, Shield, Sparkles, CreditCard, Lock, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import { createCheckout } from '@/lib/api';
+import { ApiError, createCheckout, toUiError, type UiError } from '@/lib/api';
+import { useBilling } from '@/lib/billing';
+import { ApiErrorNotice } from '@/components/ApiErrorNotice';
 
 interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentTier?: string;
-  creditsRemaining?: number;
 }
 
-export function PaywallModal({
-  isOpen,
-  onClose,
-  currentTier = 'per_scan',
-  creditsRemaining = 10,
-}: PaywallModalProps) {
+export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
+  const router = useRouter();
+  const { status, statusError } = useBilling();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<UiError | null>(null);
 
   if (!isOpen) return null;
 
   const handleCheckout = async (tier: 'per_scan' | 'pro_monthly' | 'enterprise_monthly') => {
     setLoadingTier(tier);
+    setCheckoutError(null);
     try {
+      // Real Stripe Checkout session; success/cancel URLs stay on this app's origin.
       const response = await createCheckout(tier);
-      if (response && response.checkout_url) {
-        window.location.href = response.checkout_url;
+      if (!response.checkout_url) {
+        throw new Error('Checkout did not return a redirect URL.');
       }
+      window.location.href = response.checkout_url;
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        // Purchases attach to an account: send signed-out visitors to sign in first.
+        onClose();
+        router.push('/login');
+        return;
+      }
       console.error('Checkout failed:', err);
+      setCheckoutError(toUiError(err));
     } finally {
       setLoadingTier(null);
     }
   };
+
+  const planSummary =
+    status !== null ? (
+      <>
+        Current plan:{' '}
+        <span className="font-semibold text-zinc-200 uppercase font-mono">{status.tier.replace('_', ' ')}</span>{' '}
+        {status.subscription_active
+          ? '(subscription active)'
+          : `(${status.credits_remaining} scan credit${status.credits_remaining === 1 ? '' : 's'} available)`}
+        .
+      </>
+    ) : statusError !== null ? (
+      <>Your current plan could not be loaded.</>
+    ) : (
+      <>Loading your current plan…</>
+    );
 
   const proPrice = billingCycle === 'annual' ? 39 : 49;
   const enterprisePrice = billingCycle === 'annual' ? 159 : 199;
@@ -58,8 +83,9 @@ export function PaywallModal({
           <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
             Upgrade TrustCore AI Readiness Platform
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400">
-            Current Tier: <span className="font-semibold text-zinc-200 uppercase font-mono">{currentTier}</span> ({creditsRemaining} scan credits available).
+          <p className="text-xs sm:text-sm text-zinc-400">{planSummary}</p>
+          <p className="text-xs text-zinc-500">
+            Paid scans unlock every finding, exact source citations, copy-paste fix prompts and report exports.
           </p>
 
           {/* Billing Cycle Switcher */}
@@ -91,6 +117,9 @@ export function PaywallModal({
             </div>
           </div>
         </div>
+
+        {/* Checkout failure (no simulated success): shown inline */}
+        <ApiErrorNotice error={checkoutError} />
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">

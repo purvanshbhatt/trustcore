@@ -107,7 +107,7 @@ trustcore/
 │       │   │   ├── schemas.py              # Pydantic v2 schemas (Finding, Citation, Report)
 │       │   │   ├── engine.py               # Shared pipeline: Ingest -> RulePack -> Explain
 │       │   │   ├── explainer.py            # Engine 2 LLM layer (mock / live Gemini/OpenAI)
-│       │   │   ├── storage.py              # Repository interface (LocalStorageRepository)
+│       │   │   ├── storage.py              # Repository interface (PostgresReportRepository, user_id-scoped)
 │       │   │   └── billing.py              # Stripe Checkout session & webhook verifier
 │       │   ├── rules/
 │       │   │   ├── base.py                 # Abstract BaseRulePack interface

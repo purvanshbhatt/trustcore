@@ -1,0 +1,390 @@
+{
+  "benchmark": "phase2a-api",
+  "date": "2026-11-23",
+  "method": "In-process ASGI (Starlette TestClient), 100 sequential requests per endpoint (30 for upload), then 10 workers x 10 POST /run/launchgate. No network hop. Windows 11, Python 3.13.",
+  "caveats": [
+    "Run-to-run noise on this machine is roughly +/-2 ms at p50.",
+    "After-runs use the SQLite development backend; Postgres/Supabase was not measured.",
+    "The sequential 'POST /run/launchgate (ephemeral)' figure is an ordering artifact; interleaved with persisted scans (300 each) p50 was 4.50 ms ephemeral vs 5.04 ms persisted."
+  ],
+  "runs": {
+    "before_a8dd682": {
+      "label": "before",
+      "requests_per_endpoint": 100,
+      "endpoints": {
+        "GET /health": {
+          "n": 100,
+          "p50_ms": 2.22,
+          "p95_ms": 2.83,
+          "p99_ms": 3.79,
+          "mean_ms": 2.33,
+          "bytes": 216,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/launchgate": {
+          "n": 100,
+          "p50_ms": 3.96,
+          "p95_ms": 4.86,
+          "p99_ms": 20.62,
+          "mean_ms": 4.48,
+          "bytes": 9188,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/agentscope": {
+          "n": 100,
+          "p50_ms": 3.97,
+          "p95_ms": 6.69,
+          "p99_ms": 7.53,
+          "mean_ms": 4.32,
+          "bytes": 6951,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/evidence": {
+          "n": 100,
+          "p50_ms": 3.89,
+          "p95_ms": 6.88,
+          "p99_ms": 19.74,
+          "mean_ms": 4.48,
+          "bytes": 8051,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/evalkit": {
+          "n": 100,
+          "p50_ms": 3.79,
+          "p95_ms": 4.79,
+          "p99_ms": 5.89,
+          "mean_ms": 4.07,
+          "bytes": 6943,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "GET /reports/{id}": {
+          "n": 100,
+          "p50_ms": 2.95,
+          "p95_ms": 3.52,
+          "p99_ms": 4.66,
+          "mean_ms": 3.06,
+          "bytes": 9188,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "GET /reports?limit=20": {
+          "n": 100,
+          "p50_ms": 3.15,
+          "p95_ms": 5.44,
+          "p99_ms": 6.26,
+          "mean_ms": 3.63,
+          "bytes": 2,
+          "statuses": {
+            "200": 100
+          }
+        }
+      },
+      "concurrency": {
+        "workers": 10,
+        "requests": 100,
+        "wall_s": 0.622,
+        "throughput_rps": 160.8,
+        "p50_ms": 58.07,
+        "p95_ms": 86.11,
+        "p99_ms": 88.94,
+        "statuses": {
+          "200": 100
+        }
+      }
+    },
+    "after_auth_off": {
+      "label": "after",
+      "requests_per_endpoint": 100,
+      "endpoints": {
+        "GET /health": {
+          "n": 100,
+          "p50_ms": 2.55,
+          "p95_ms": 3.1,
+          "p99_ms": 4.75,
+          "mean_ms": 2.65,
+          "bytes": 216,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/launchgate": {
+          "n": 100,
+          "p50_ms": 4.62,
+          "p95_ms": 5.41,
+          "p99_ms": 5.8,
+          "mean_ms": 4.67,
+          "bytes": 8537,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/agentscope": {
+          "n": 100,
+          "p50_ms": 3.83,
+          "p95_ms": 4.38,
+          "p99_ms": 4.7,
+          "mean_ms": 3.95,
+          "bytes": 6958,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/evidence": {
+          "n": 100,
+          "p50_ms": 3.89,
+          "p95_ms": 4.95,
+          "p99_ms": 12.61,
+          "mean_ms": 4.23,
+          "bytes": 8085,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/evalkit": {
+          "n": 100,
+          "p50_ms": 3.47,
+          "p95_ms": 4.37,
+          "p99_ms": 5.16,
+          "mean_ms": 3.57,
+          "bytes": 6977,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "GET /reports/{id}": {
+          "n": 100,
+          "p50_ms": 4.66,
+          "p95_ms": 5.87,
+          "p99_ms": 6.45,
+          "mean_ms": 4.46,
+          "bytes": 8537,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "GET /reports?limit=20": {
+          "n": 100,
+          "p50_ms": 7.2,
+          "p95_ms": 9.66,
+          "p99_ms": 19.15,
+          "mean_ms": 7.87,
+          "bytes": 141121,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/launchgate (ephemeral)": {
+          "n": 100,
+          "p50_ms": 6.54,
+          "p95_ms": 8.39,
+          "p99_ms": 8.97,
+          "mean_ms": 6.82,
+          "bytes": 8536,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /ingest/upload (zip, 400 entries)": {
+          "n": 30,
+          "p50_ms": 17.96,
+          "p95_ms": 22.04,
+          "p99_ms": 24.0,
+          "mean_ms": 18.53,
+          "bytes": 247230,
+          "statuses": {
+            "200": 30
+          }
+        },
+        "DELETE /reports/{id}": {
+          "n": 100,
+          "p50_ms": 4.84,
+          "p95_ms": 5.74,
+          "p99_ms": 6.4,
+          "mean_ms": 4.94,
+          "bytes": 0,
+          "statuses": {
+            "204": 100
+          }
+        }
+      },
+      "ingest_zip_bytes": 60442,
+      "concurrency": {
+        "workers": 10,
+        "requests": 100,
+        "wall_s": 0.699,
+        "throughput_rps": 143.1,
+        "p50_ms": 64.17,
+        "p95_ms": 100.87,
+        "p99_ms": 119.4,
+        "statuses": {
+          "200": 100
+        }
+      }
+    },
+    "after_auth_hs256": {
+      "label": "after_auth",
+      "requests_per_endpoint": 100,
+      "endpoints": {
+        "GET /health": {
+          "n": 100,
+          "p50_ms": 2.41,
+          "p95_ms": 5.45,
+          "p99_ms": 6.31,
+          "mean_ms": 3.0,
+          "bytes": 216,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/launchgate": {
+          "n": 100,
+          "p50_ms": 4.4,
+          "p95_ms": 5.49,
+          "p99_ms": 7.26,
+          "mean_ms": 4.69,
+          "bytes": 8537,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/agentscope": {
+          "n": 100,
+          "p50_ms": 4.18,
+          "p95_ms": 5.09,
+          "p99_ms": 9.51,
+          "mean_ms": 4.41,
+          "bytes": 6958,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/evidence": {
+          "n": 100,
+          "p50_ms": 3.94,
+          "p95_ms": 4.64,
+          "p99_ms": 4.86,
+          "mean_ms": 4.02,
+          "bytes": 8085,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/evalkit": {
+          "n": 100,
+          "p50_ms": 3.68,
+          "p95_ms": 4.44,
+          "p99_ms": 5.25,
+          "mean_ms": 3.84,
+          "bytes": 6977,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "GET /reports/{id}": {
+          "n": 100,
+          "p50_ms": 4.81,
+          "p95_ms": 6.05,
+          "p99_ms": 6.57,
+          "mean_ms": 4.51,
+          "bytes": 8537,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "GET /reports?limit=20": {
+          "n": 100,
+          "p50_ms": 7.43,
+          "p95_ms": 8.48,
+          "p99_ms": 9.15,
+          "mean_ms": 7.79,
+          "bytes": 141121,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /run/launchgate (ephemeral)": {
+          "n": 100,
+          "p50_ms": 6.48,
+          "p95_ms": 7.84,
+          "p99_ms": 10.38,
+          "mean_ms": 6.7,
+          "bytes": 8536,
+          "statuses": {
+            "200": 100
+          }
+        },
+        "POST /ingest/upload (zip, 400 entries)": {
+          "n": 30,
+          "p50_ms": 18.16,
+          "p95_ms": 20.86,
+          "p99_ms": 31.79,
+          "mean_ms": 18.82,
+          "bytes": 247230,
+          "statuses": {
+            "200": 30
+          }
+        },
+        "DELETE /reports/{id}": {
+          "n": 100,
+          "p50_ms": 4.97,
+          "p95_ms": 6.05,
+          "p99_ms": 6.25,
+          "mean_ms": 5.1,
+          "bytes": 0,
+          "statuses": {
+            "204": 100
+          }
+        }
+      },
+      "ingest_zip_bytes": 60442,
+      "concurrency": {
+        "workers": 10,
+        "requests": 100,
+        "wall_s": 0.747,
+        "throughput_rps": 133.8,
+        "p50_ms": 67.33,
+        "p95_ms": 110.05,
+        "p99_ms": 148.56,
+        "statuses": {
+          "200": 100
+        }
+      }
+    }
+  },
+  "build": {
+    "pytest": {
+      "before": {
+        "tests": 6,
+        "seconds": 0.82
+      },
+      "after": {
+        "tests": 168,
+        "seconds": 5.9
+      }
+    },
+    "next_build_seconds_after": 14,
+    "route_js_gzip_kb_after": {
+      "/": 103.6,
+      "/launchgate": 184.1,
+      "/agentscope": 183.7,
+      "/evidence": 180.4,
+      "/evalkit": 182.1,
+      "/reports/[id]": 179.1,
+      "/login": 163.1,
+      "/auth/callback": 161.6
+    },
+    "supabase_js_chunks_gzip_kb": 67.0,
+    "route_js_before": "not measured (baseline build could not run outside the repo drive)"
+  }
+}

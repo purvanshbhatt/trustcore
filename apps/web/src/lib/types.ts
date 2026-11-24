@@ -6,9 +6,10 @@ export type ReadinessStatus = 'PASSED' | 'WARNING' | 'BLOCKED';
 
 export interface SourceCitation {
   file_path: string;
-  line_start?: number;
-  line_end?: number;
-  section_title?: string;
+  /** Line numbers and section are `null`, and `snippet` is empty, when the citation is locked (preview). */
+  line_start?: number | null;
+  line_end?: number | null;
+  section_title?: string | null;
   snippet: string;
   source_type: 'code' | 'config' | 'policy_doc' | 'questionnaire' | 'test_case';
 }
@@ -119,10 +120,11 @@ export interface Report {
   findings: Finding[];
   executive_summary: string;
   remediation_prompts: RemediationPrompt[];
-  permission_diff?: PermissionDiffItem[];
-  permissions_matrix?: MCPToolPermission[];
-  evidence_matrix?: EvidenceMappingItem[];
-  eval_results?: EvalCaseResult[];
+  /** Detail views are `null` in preview reports (`metadata.access === 'preview'`). */
+  permission_diff?: PermissionDiffItem[] | null;
+  permissions_matrix?: MCPToolPermission[] | null;
+  evidence_matrix?: EvidenceMappingItem[] | null;
+  eval_results?: EvalCaseResult[] | null;
   regression_diff?: ModelRegressionDiffItem[];
   client_signoff?: ClientAcceptanceSignoff;
   metadata?: Record<string, any>;
@@ -140,6 +142,22 @@ export interface ScanRequest {
   files: ScanInputFile[];
   raw_content?: string;
   options?: Record<string, any>;
+  /** Zero-Retention Mode: scan in memory, return the report, never persist it. */
+  ephemeral?: boolean;
+}
+
+export interface IngestSkippedFile {
+  readonly path: string;
+  readonly reason: string;
+}
+
+export interface IngestResponse {
+  readonly source: string;
+  readonly files: ScanInputFile[];
+  readonly skipped: IngestSkippedFile[];
+  readonly skipped_count: number;
+  readonly total_bytes: number;
+  readonly truncated: boolean;
 }
 
 export interface BillingCheckoutRequest {
@@ -155,9 +173,57 @@ export interface BillingCheckoutResponse {
   message: string;
 }
 
+export type BillingTier = 'free' | 'per_scan' | 'pro_monthly' | 'enterprise';
+
 export interface BillingStatusResponse {
-  tier: string;
+  tier: BillingTier;
   credits_remaining: number;
   is_mock: boolean;
   subscription_active: boolean;
+  /** True while the caller's single free preview scan is still unused. */
+  free_preview_available: boolean;
+  /** True when the next scan returns a full report (credits or an active subscription). */
+  can_run_full_scan: boolean;
+}
+
+/** `Report.metadata.access`: a preview withholds citations, fix prompts and detail views. */
+export type ReportAccess = 'full' | 'preview';
+
+/** Normalised `Report.metadata.locked` for preview reports. */
+export interface ReportLockedInfo {
+  readonly hiddenFindings: number;
+  readonly features: readonly string[];
+}
+
+type ReportMetadataCarrier = { readonly metadata?: Record<string, unknown> } | null | undefined;
+
+/** Access level of a report. Reports without `metadata.access` (older ones) are full. */
+export function getReportAccess(report: ReportMetadataCarrier): ReportAccess {
+  const access: unknown = report?.metadata?.access;
+  return access === 'preview' ? 'preview' : 'full';
+}
+
+export function isPreviewReport(report: ReportMetadataCarrier): boolean {
+  return getReportAccess(report) === 'preview';
+}
+
+/** What a preview report withholds; zero/empty for full reports. */
+export function getLockedInfo(report: ReportMetadataCarrier): ReportLockedInfo {
+  const locked: unknown = report?.metadata?.locked;
+  if (typeof locked !== 'object' || locked === null) {
+    return { hiddenFindings: 0, features: [] };
+  }
+  const hidden: unknown = (locked as { hidden_findings?: unknown }).hidden_findings;
+  const features: unknown = (locked as { features?: unknown }).features;
+  return {
+    hiddenFindings: typeof hidden === 'number' && Number.isFinite(hidden) && hidden > 0 ? Math.floor(hidden) : 0,
+    features: Array.isArray(features)
+      ? features.filter((item): item is string => typeof item === 'string')
+      : [],
+  };
+}
+
+/** Preview reports ship citations with an empty snippet: the exact source is locked. */
+export function isCitationLocked(citation: Pick<SourceCitation, 'snippet'>): boolean {
+  return citation.snippet === '';
 }

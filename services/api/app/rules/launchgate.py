@@ -8,6 +8,7 @@ from app.core.schemas import (
     Severity,
     ScanInputFile
 )
+from app.core.redaction import mask_secret, safe_snippet
 from app.rules.base import BaseRulePack, RulePackResult
 
 # Deterministic regex patterns for leaked secrets
@@ -53,6 +54,22 @@ SECRET_PATTERNS = [
         "impact": "Bypasses all PostgreSQL Row Level Security (RLS) policies completely."
     }
 ]
+
+# Open RLS policies: "CREATE POLICY ... USING (true)" or "WITH CHECK (true)".
+# Matched in two linear steps rather than one "create policy .* using" pattern, which
+# backtracks quadratically on a long line that repeats "create policy".
+_CREATE_POLICY = re.compile(r"create\s+policy\s", re.IGNORECASE)
+_USING_TRUE = re.compile(r"using\s*\(\s*true\s*\)", re.IGNORECASE)
+_WITH_CHECK_TRUE = re.compile(r"with\s+check\s*\(\s*true\s*\)", re.IGNORECASE)
+
+
+def _is_open_rls_policy(line: str) -> bool:
+    """True when a line creates a policy with ``USING (true)`` or contains ``WITH CHECK (true)``."""
+    created = _CREATE_POLICY.search(line)
+    if created is not None and _USING_TRUE.search(line, created.end()) is not None:
+        return True
+    return _WITH_CHECK_TRUE.search(line) is not None
+
 
 # Hallucinated or typosquatted AI package names
 SUSPICIOUS_PACKAGES = {
@@ -102,8 +119,11 @@ class LaunchGateRulePack(BaseRulePack):
                     match = re.search(pat["regex"], line)
                     if match:
                         matched_str = match.group(0)
-                        masked = matched_str[:8] + "..." + matched_str[-4:]
-                        snippet = line.strip()
+                        # Never store or return the live credential: mask it everywhere.
+                        masked = mask_secret(matched_str)
+                        # Mask the exact value this rule matched first, so the snippet is safe
+                        # even where the generic redaction patterns would not recognise it.
+                        snippet = safe_snippet(line.replace(matched_str, masked))
 
                         citation = SourceCitation(
                             file_path=file_name,
@@ -138,7 +158,7 @@ class LaunchGateRulePack(BaseRulePack):
                             line_start=line_idx,
                             line_end=line_idx,
                             section_title=f"Environment Definition",
-                            snippet=line.strip(),
+                            snippet=safe_snippet(line),
                             source_type="config"
                         )
                         citations.append(citation)
@@ -153,7 +173,7 @@ class LaunchGateRulePack(BaseRulePack):
                                 category="Frontend Leak",
                                 citation=citation,
                                 impact="Exposes administrative backend keys in user-accessible browser bundles.",
-                                metadata={"variable": line.split("=")[0] if "=" in line else line}
+                                metadata={"variable": safe_snippet(line.split("=", 1)[0])}
                             )
                         )
 
@@ -161,14 +181,13 @@ class LaunchGateRulePack(BaseRulePack):
             if any(ext in file_name.lower() for ext in [".sql", ".prisma", "supabase", "schema"]):
                 # Look for open USING (true) policies
                 for line_idx, line in enumerate(lines, start=1):
-                    if re.search(r"create\s+policy\s+.*using\s*\(\s*true\s*\)", line, re.IGNORECASE) or \
-                       re.search(r"with\s+check\s*\(\s*true\s*\)", line, re.IGNORECASE):
+                    if _is_open_rls_policy(line):
                         citation = SourceCitation(
                             file_path=file_name,
                             line_start=line_idx,
                             line_end=line_idx,
                             section_title="RLS Policy Definition",
-                            snippet=line.strip(),
+                            snippet=safe_snippet(line),
                             source_type="code"
                         )
                         citations.append(citation)
@@ -196,7 +215,7 @@ class LaunchGateRulePack(BaseRulePack):
                             line_start=line_idx,
                             line_end=line_idx,
                             section_title="Firebase Rule Clause",
-                            snippet=line.strip(),
+                            snippet=safe_snippet(line),
                             source_type="config"
                         )
                         citations.append(citation)
@@ -225,7 +244,7 @@ class LaunchGateRulePack(BaseRulePack):
                                 line_start=line_idx,
                                 line_end=line_idx,
                                 section_title="Dependencies",
-                                snippet=line.strip(),
+                                snippet=safe_snippet(line),
                                 source_type="config"
                             )
                             citations.append(citation)

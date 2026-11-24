@@ -10,6 +10,7 @@ from app.core.schemas import (
     ScanInputFile,
     PermissionDiffItem
 )
+from app.core.redaction import safe_snippet
 from app.rules.base import BaseRulePack, RulePackResult
 
 DANGEROUS_TOOLS = [
@@ -71,7 +72,7 @@ class AgentScopeRulePack(BaseRulePack):
                         line_start=idx,
                         line_end=idx,
                         section_title="Permission Scopes",
-                        snippet=line.strip(),
+                        snippet=safe_snippet(line),
                         source_type="config"
                     )
                     citations.append(citation)
@@ -108,7 +109,8 @@ class AgentScopeRulePack(BaseRulePack):
                         line_start=idx,
                         line_end=idx,
                         section_title="Environment Block",
-                        snippet=line.strip()[:60] + "...",
+                        # Redact before truncating so a cut can never leave a partial key unmasked.
+                        snippet=safe_snippet(line),
                         source_type="config"
                     )
                     citations.append(citation)
@@ -146,7 +148,7 @@ class AgentScopeRulePack(BaseRulePack):
                             line_start=idx,
                             line_end=idx,
                             section_title="Server Arguments / Mounts",
-                            snippet=line.strip(),
+                            snippet=safe_snippet(line),
                             source_type="config"
                         )
                         citations.append(citation)
@@ -184,7 +186,7 @@ class AgentScopeRulePack(BaseRulePack):
                             line_start=idx,
                             line_end=idx,
                             section_title="Tool Capabilities",
-                            snippet=line.strip(),
+                            snippet=safe_snippet(line),
                             source_type="config"
                         )
                         citations.append(citation)

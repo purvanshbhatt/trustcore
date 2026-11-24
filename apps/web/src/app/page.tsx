@@ -20,6 +20,10 @@ import {
   Terminal,
 } from 'lucide-react';
 import { SecurityGauge } from '@/components/SecurityGauge';
+import { IllustrativeExample } from '@/components/DemoNotice';
+
+// Read the flag directly so the hub does not pull the API client into its bundle.
+const isMockEnabled = (): boolean => process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 import { FreeToolsSection } from '@/components/FreeToolsSection';
 import { useABExperiment } from '@/lib/abTesting';
 
@@ -160,7 +164,14 @@ export default function OverviewHubPage() {
 
           {/* Right Column: Interactive Posture Gauge */}
           <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/40">
-            <SecurityGauge score={42} label="Monorepo Aggregate AI Readiness Posture" size="md" />
+            {/* Fixed sample score: in live mode it is labelled so it cannot pass for the visitor's posture */}
+            {isMockEnabled() ? (
+              <SecurityGauge score={42} label="Monorepo Aggregate AI Readiness Posture" size="md" />
+            ) : (
+              <IllustrativeExample>
+                <SecurityGauge score={42} label="Sample AI Readiness Posture" size="md" />
+              </IllustrativeExample>
+            )}
           </div>
         </div>
 
@@ -196,7 +207,13 @@ export default function OverviewHubPage() {
         </div>
       </div>
 
-      {/* Aggregate Readiness Status Bar */}
+      {/* Aggregate Readiness Status Bar (fixed sample figures; labelled in live mode) */}
+      <div className="space-y-2">
+      {!isMockEnabled() && (
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-mono font-semibold text-amber-300">
+          Illustrative example — not your data
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
           <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
@@ -229,6 +246,7 @@ export default function OverviewHubPage() {
           <p className="mt-1 text-2xl font-extrabold text-amber-400 font-mono">2 Gaps</p>
           <span className="text-[10px] text-zinc-400">Zero Hallucinations</span>
         </div>
+      </div>
       </div>
 
       {/* Product Modules Grid */}
@@ -286,7 +304,9 @@ export default function OverviewHubPage() {
                         t.status === 'BLOCKED' ? 'bg-red-500' : 'bg-amber-500'
                       }`}
                     />
-                    <span className="text-[11px] font-mono text-zinc-300">{t.sampleRisk}</span>
+                    <span className="text-[11px] font-mono text-zinc-300">
+                      {isMockEnabled() ? t.sampleRisk : `Sample result: ${t.sampleRisk}`}
+                    </span>
                   </div>
 
                   <Link

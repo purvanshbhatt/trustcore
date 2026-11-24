@@ -83,6 +83,9 @@ class EvidenceRulePack(BaseRulePack):
         # Combine all uploaded policy documents for indexing
         policy_corpus = []
         for f in all_files:
+            if f.file_type == "questionnaire":
+                # Questionnaires state requirements; they are never evidence for them.
+                continue
             lines = f.content.splitlines()
             for line_no, line in enumerate(lines, start=1):
                 if line.strip():

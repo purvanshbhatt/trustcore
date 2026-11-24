@@ -5,6 +5,11 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
+# Fail closed: production requires auth (SUPABASE_URL or SUPABASE_JWT_SECRET) and DATABASE_URL.
+ENV ENVIRONMENT=production
+# Cloud Run puts one proxy in front of the container; the client IP is the last
+# X-Forwarded-For entry. Change this if the deployment has a different proxy chain.
+ENV TRUSTED_PROXY_HOPS=1
 
 WORKDIR /app
 

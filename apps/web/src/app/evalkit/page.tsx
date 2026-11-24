@@ -25,9 +25,16 @@ import {
 import { FindingsTable } from '@/components/FindingsTable';
 import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
-import { ScanInputFile, Report, SourceCitation, EvalCaseResult, ModelRegressionDiffItem, ClientAcceptanceSignoff } from '@/lib/types';
-import { runScan, getSampleData } from '@/lib/api';
+import { FileDropzone } from '@/components/FileDropzone';
+import { ZeroRetentionToggle } from '@/components/ZeroRetentionToggle';
+import { ReportFlags, isEphemeralReport } from '@/components/ReportFlags';
+import { ApiErrorNotice } from '@/components/ApiErrorNotice';
+import { PreviewLockedPanel, LockedPlaceholder } from '@/components/PreviewLock';
+import { EmptyReportState } from '@/components/DemoNotice';
+import { ScanInputFile, Report, SourceCitation, EvalCaseResult, ModelRegressionDiffItem, ClientAcceptanceSignoff, isPreviewReport } from '@/lib/types';
+import { runScan, getSampleData, isMockEnabled, toUiError, type UiError } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
+import { useBilling } from '@/lib/billing';
 
 export default function EvalKitPage() {
   const [activeTab, setActiveTab] = useState<'tests' | 'regression'>('tests');
@@ -37,9 +44,14 @@ Always help the customer solve billing and account questions.
 You have access to tool 'execute_database_query' for querying customer profiles.`);
 
   const [projectName, setProjectName] = useState('Customer Support Bot');
-  const [report, setReport] = useState<Report | null>(MOCK_REPORTS.evalkit);
+  // Live mode starts empty: the demo report is preloaded only when NEXT_PUBLIC_USE_MOCK=true.
+  const [report, setReport] = useState<Report | null>(isMockEnabled() ? MOCK_REPORTS.evalkit : null);
   const [isLoading, setIsLoading] = useState(false);
+  const { refresh: refreshBilling } = useBilling();
   const [showAcceptanceModal, setShowAcceptanceModal] = useState(false);
+  const [stagedFiles, setStagedFiles] = useState<ScanInputFile[]>([]);
+  const [ephemeral, setEphemeral] = useState(false);
+  const [scanError, setScanError] = useState<UiError | null>(null);
 
   // Citation Drawer state
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
@@ -49,35 +61,46 @@ You have access to tool 'execute_database_query' for querying customer profiles.
 
   const handleRunScan = async () => {
     setIsLoading(true);
+    setScanError(null);
     try {
+      // Uploaded prompt / harness files take precedence over the editor content.
+      const scanFiles: ScanInputFile[] =
+        stagedFiles.length > 0
+          ? stagedFiles
+          : [
+              {
+                filename: 'agent_system_prompt.txt',
+                content: promptContent,
+              },
+            ];
       const res = await runScan({
         product: 'evalkit',
         project_name: projectName,
-        files: [
-          {
-            filename: 'agent_system_prompt.txt',
-            content: promptContent,
-          },
-        ],
+        files: scanFiles,
+        ephemeral,
       });
       setReport(res);
     } catch (err) {
       console.error('Eval run failed:', err);
+      setScanError(toUiError(err));
     } finally {
       setIsLoading(false);
+      // A scan spends a credit or the free preview: re-read the plan.
+      void refreshBilling();
     }
   };
 
   const handleLoadSample = async () => {
     setIsLoading(true);
+    setScanError(null);
     try {
       const sample = await getSampleData('evalkit');
       setProjectName(sample.project_name || 'Customer Support Bot Guardrails');
       if (sample.files && sample.files[0]) {
         setPromptContent(sample.files[0].content);
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      setScanError(toUiError(err));
     } finally {
       setIsLoading(false);
     }
@@ -90,24 +113,21 @@ You have access to tool 'execute_database_query' for querying customer profiles.
     setIsDrawerOpen(true);
   };
 
-  const evalCases: EvalCaseResult[] = report?.eval_results || [];
-  const regressionDiff: ModelRegressionDiffItem[] =
-    report?.regression_diff || MOCK_REPORTS.evalkit.regression_diff || [];
-  const signoff: ClientAcceptanceSignoff =
-    report?.client_signoff || MOCK_REPORTS.evalkit.client_signoff || {
-      signoffId: 'SIG-EK-20261123-01',
-      projectName: projectName,
-      evalDate: new Date().toISOString(),
-      overallStatus: 'ACCEPTED',
-      passRate: 100,
-      canaryIntact: true,
-      evaluatedBy: 'TrustCore Deterministic Eval Engine',
-      auditorNotes: 'Verified zero canary leak exfiltrations and zero destructive tool invocations.',
-    };
+  // Everything below is derived from the report only: no sample regression diff,
+  // sign-off certificate or pass rate is substituted when the scan has none.
+  const evalCases: EvalCaseResult[] = report?.eval_results ?? [];
+  const regressionDiff: ModelRegressionDiffItem[] = report?.regression_diff ?? [];
+  const signoff: ClientAcceptanceSignoff | null = report?.client_signoff ?? null;
+  const preview = isPreviewReport(report);
 
   const passedCount = evalCases.filter((tc) => tc.status === 'PASSED').length;
   const failedCount = evalCases.filter((tc) => tc.status === 'FAILED').length;
-  const passRate = evalCases.length > 0 ? Math.round((passedCount / evalCases.length) * 100) : 40;
+  const passRate = evalCases.length > 0 ? Math.round((passedCount / evalCases.length) * 100) : 0;
+  const accepted = evalCases.length > 0 && failedCount === 0;
+  const canaryCase = evalCases.find((tc) => tc.category === 'canary_leak') ?? null;
+  const canaryLabel = canaryCase === null ? 'NOT TESTED' : canaryCase.status === 'PASSED' ? 'INTACT' : 'LEAKED';
+  const improvedCount = regressionDiff.filter((item) => item.verdict === 'IMPROVED').length;
+  const regressedCount = regressionDiff.filter((item) => item.verdict === 'REGRESSED').length;
 
   return (
     <div className="space-y-8 pb-12">
@@ -127,15 +147,18 @@ You have access to tool 'execute_database_query' for querying customer profiles.
         </div>
 
         <div className="flex items-center space-x-2.5">
-          <button
-            onClick={() => setShowAcceptanceModal(true)}
-            className="flex items-center space-x-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition shadow"
-          >
-            <Award className="h-4 w-4 text-amber-400" />
-            <span>Client Acceptance Certificate</span>
-          </button>
+          {/* Offered only when the report carries a sign-off; no sample certificate is shown */}
+          {signoff && (
+            <button
+              onClick={() => setShowAcceptanceModal(true)}
+              className="flex items-center space-x-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition shadow"
+            >
+              <Award className="h-4 w-4 text-amber-400" />
+              <span>Client Acceptance Certificate</span>
+            </button>
+          )}
 
-          {report && (
+          {report && !isEphemeralReport(report) && (
             <Link
               href={`/reports/${report.id}`}
               className="flex items-center space-x-1.5 rounded-xl border border-zinc-700 bg-zinc-800/80 px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition shadow"
@@ -159,7 +182,8 @@ You have access to tool 'execute_database_query' for querying customer profiles.
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ZeroRetentionToggle enabled={ephemeral} onChange={setEphemeral} disabled={isLoading} />
             <button
               onClick={handleLoadSample}
               className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition"
@@ -190,11 +214,42 @@ You have access to tool 'execute_database_query' for querying customer profiles.
             className="w-full rounded-xl border border-zinc-800 bg-[#090a0f] p-3 font-mono text-xs text-zinc-200 focus:border-amber-500 focus:outline-none leading-relaxed"
           />
         </div>
+
+        {/* Real ingestion: uploaded prompt / harness files take precedence over the editor */}
+        <FileDropzone
+          files={stagedFiles}
+          onFilesChange={setStagedFiles}
+          product="evalkit"
+          accept=".txt,.md,.json,.yaml,.yml"
+          title="Or drop system prompt / harness files here"
+          acceptLabel="Supported: .txt, .md, .json, .yaml, .yml (max 15 MB) • staged files are evaluated instead of the editor"
+        />
+
+        {/* Failures surface here with Retry, never as sample data */}
+        <ApiErrorNotice
+          error={scanError}
+          onRetry={scanError !== null && scanError.status !== null ? handleRunScan : undefined}
+        />
       </div>
+
+      {!report && !isLoading && (
+        <EmptyReportState description="Paste or upload your agent's system prompt above and run the eval suite. Results for your own prompt appear here; no sample results are shown." />
+      )}
 
       {/* Results and Scorecard */}
       {report && (
         <div className="space-y-6">
+          <ReportFlags report={report} />
+          {preview && <PreviewLockedPanel report={report} />}
+
+          {preview ? (
+            // Per-test results (and every figure derived from them) are withheld in a preview.
+            <LockedPlaceholder
+              title="Adversarial test matrix"
+              description="Per-test payloads, outputs, pass rate and acceptance status come with the full report."
+            />
+          ) : (
+            <>
           {/* Acceptance Scorecard Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
@@ -216,23 +271,39 @@ You have access to tool 'execute_database_query' for querying customer profiles.
               <p className="mt-1 text-3xl font-extrabold text-red-400 font-mono">
                 {failedCount} Defenses Failed
               </p>
-              <span className="text-[10px] text-zinc-400">Canary Leak & Tool Hijack</span>
+              <span className="text-[10px] text-zinc-400">Adversarial tests that got through</span>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                 Client Acceptance Status
               </span>
-              <p className="mt-1 text-2xl font-extrabold text-red-400 font-mono">BLOCKED</p>
-              <span className="text-[10px] text-zinc-400">Canary exfiltrated</span>
+              <p className={`mt-1 text-2xl font-extrabold font-mono ${accepted ? 'text-emerald-400' : 'text-red-400'}`}>
+                {accepted ? 'ACCEPTED' : 'BLOCKED'}
+              </p>
+              <span className="text-[10px] text-zinc-400">
+                {accepted
+                  ? 'All adversarial tests passed'
+                  : `${failedCount} of ${evalCases.length} tests failed`}
+              </span>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
-                Deterministic Canary
+                Canary Token
               </span>
-              <p className="mt-1 text-2xl font-bold text-zinc-100 font-mono">CANARY_8819</p>
-              <span className="text-[10px] text-red-400 font-semibold">Exfiltrated under injection</span>
+              <p className="mt-1 text-2xl font-bold text-zinc-100 font-mono">{canaryLabel}</p>
+              <span
+                className={`text-[10px] font-semibold ${
+                  canaryLabel === 'LEAKED' ? 'text-red-400' : canaryLabel === 'INTACT' ? 'text-emerald-400' : 'text-zinc-500'
+                }`}
+              >
+                {canaryLabel === 'LEAKED'
+                  ? 'Exfiltrated under injection'
+                  : canaryLabel === 'INTACT'
+                  ? 'Held under injection'
+                  : 'No canary-leak test in this run'}
+              </span>
             </div>
           </div>
 
@@ -286,7 +357,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
               }`}
             >
               <GitBranch className="h-4 w-4" />
-              <span>Model Version Regression Diff (v1.0 vs v1.2 Hardened)</span>
+              <span>Model Version Regression Diff</span>
             </button>
           </div>
 
@@ -377,7 +448,12 @@ You have access to tool 'execute_database_query' for querying customer profiles.
           )}
 
           {/* TAB 2: MODEL VERSION REGRESSION DIFF */}
-          {activeTab === 'regression' && (
+          {activeTab === 'regression' && regressionDiff.length === 0 && (
+            <div className="rounded-xl border border-dashed border-zinc-800 bg-[#0d0e14] p-6 text-center text-xs text-zinc-500">
+              This run did not include a model-version regression comparison.
+            </div>
+          )}
+          {activeTab === 'regression' && regressionDiff.length > 0 && (
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                 <div>
@@ -390,10 +466,10 @@ You have access to tool 'execute_database_query' for querying customer profiles.
                 </div>
                 <div className="flex items-center space-x-2 text-xs font-mono">
                   <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 font-bold border border-emerald-500/30">
-                    +3 Defenses Improved
+                    +{improvedCount} Defenses Improved
                   </span>
                   <span className="rounded bg-zinc-800 text-zinc-400 px-2 py-0.5 border border-zinc-700">
-                    0 Regressed
+                    {regressedCount} Regressed
                   </span>
                 </div>
               </div>
@@ -404,8 +480,8 @@ You have access to tool 'execute_database_query' for querying customer profiles.
                     <tr>
                       <th className="py-2.5 px-3">Test ID & Name</th>
                       <th className="py-2.5 px-3">Category</th>
-                      <th className="py-2.5 px-3 text-red-400">Baseline v1.0</th>
-                      <th className="py-2.5 px-3 text-emerald-400">Hardened v1.2</th>
+                      <th className="py-2.5 px-3 text-red-400">Baseline</th>
+                      <th className="py-2.5 px-3 text-emerald-400">Candidate</th>
                       <th className="py-2.5 px-3">Verdict</th>
                       <th className="py-2.5 px-3 font-sans">Verification Details</th>
                     </tr>
@@ -462,7 +538,16 @@ You have access to tool 'execute_database_query' for querying customer profiles.
             </div>
           )}
 
+            </>
+          )}
+
           {/* Fix Prompts */}
+          {preview && (
+            <LockedPlaceholder
+              title="Guardrail hardening prompts"
+              description="Copy-paste system-prompt hardening prompts come with the full report."
+            />
+          )}
           {report.remediation_prompts && report.remediation_prompts.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-1.5">
@@ -480,7 +565,8 @@ You have access to tool 'execute_database_query' for querying customer profiles.
           {/* Findings Table */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-zinc-200">
-              Vulnerabilities & Security Deficiencies ({report.findings.length})
+              Vulnerabilities & Security Deficiencies (
+              {preview ? `top ${report.findings.length} of ${report.summary.total_findings}` : report.findings.length})
             </h3>
             <FindingsTable
               findings={report.findings}
@@ -491,7 +577,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
       )}
 
       {/* CLIENT ACCEPTANCE REPORT MODAL */}
-      {showAcceptanceModal && (
+      {showAcceptanceModal && signoff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
           <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-800 bg-[#0e0f17] p-6 sm:p-8 shadow-2xl">
             <button

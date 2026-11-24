@@ -23,16 +23,27 @@ import {
 import { FindingsTable } from '@/components/FindingsTable';
 import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
-import { ScanInputFile, Report, SourceCitation, EvidenceMappingItem } from '@/lib/types';
-import { runScan, getSampleData } from '@/lib/api';
+import { FileDropzone } from '@/components/FileDropzone';
+import { ZeroRetentionToggle } from '@/components/ZeroRetentionToggle';
+import { ReportFlags, isEphemeralReport } from '@/components/ReportFlags';
+import { ApiErrorNotice } from '@/components/ApiErrorNotice';
+import { PreviewLockedPanel, LockedPlaceholder } from '@/components/PreviewLock';
+import { EmptyReportState } from '@/components/DemoNotice';
+import { ScanInputFile, Report, SourceCitation, EvidenceMappingItem, isPreviewReport } from '@/lib/types';
+import { runScan, getSampleData, isMockEnabled, toUiError, type UiError } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
+import { useBilling } from '@/lib/billing';
 
 export default function EvidenceWorkbenchPage() {
-  const [questionnaireFile, setQuestionnaireFile] = useState<string>('SOC2_Vendor_Questionnaire.csv');
-  const [evidenceDocFile, setEvidenceDocFile] = useState<string>('Information_Security_Policy.md');
+  const [questionnaireFiles, setQuestionnaireFiles] = useState<ScanInputFile[]>([]);
+  const [policyFiles, setPolicyFiles] = useState<ScanInputFile[]>([]);
+  const [ephemeral, setEphemeral] = useState(false);
+  const [scanError, setScanError] = useState<UiError | null>(null);
   const [projectName, setProjectName] = useState('Enterprise SOC 2 Questionnaire');
-  const [report, setReport] = useState<Report | null>(MOCK_REPORTS.evidence);
+  // Live mode starts empty: the demo report is preloaded only when NEXT_PUBLIC_USE_MOCK=true.
+  const [report, setReport] = useState<Report | null>(isMockEnabled() ? MOCK_REPORTS.evidence : null);
   const [isLoading, setIsLoading] = useState(false);
+  const { refresh: refreshBilling } = useBilling();
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VERIFIED_EVIDENCE' | 'UNSUPPORTED_GAP'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -44,30 +55,43 @@ export default function EvidenceWorkbenchPage() {
 
   const handleRunScan = async () => {
     setIsLoading(true);
+    setScanError(null);
     try {
-      const sample = await getSampleData('evidence');
+      // Staged uploads (questionnaire + policy docs) take precedence; otherwise run the SOC 2 sample.
+      const stagedFiles: ScanInputFile[] = [...questionnaireFiles, ...policyFiles];
+      let scanFiles: ScanInputFile[] = stagedFiles;
+      if (stagedFiles.length === 0) {
+        const sample = await getSampleData('evidence');
+        scanFiles = sample.files || [];
+      }
       const res = await runScan({
         product: 'evidence',
         project_name: projectName,
-        files: sample.files || [],
+        files: scanFiles,
+        ephemeral,
       });
       setReport(res);
     } catch (err) {
       console.error('Evidence analysis failed:', err);
+      setScanError(toUiError(err));
     } finally {
       setIsLoading(false);
+      // A scan spends a credit or the free preview: re-read the plan.
+      void refreshBilling();
     }
   };
 
   const handleLoadSample = async () => {
     setIsLoading(true);
+    setScanError(null);
     try {
       const sample = await getSampleData('evidence');
       setProjectName(sample.project_name || 'SOC 2 Type II Vendor Review');
-      setQuestionnaireFile('SOC2_Vendor_Questionnaire.csv (6 controls)');
-      setEvidenceDocFile('Information_Security_Policy.md (v2.4)');
-    } catch {
-      // fallback
+      // The sample ships policy documents; controls come from the built-in SOC 2 set.
+      setQuestionnaireFiles([]);
+      setPolicyFiles(sample.files || []);
+    } catch (err) {
+      setScanError(toUiError(err));
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +118,9 @@ export default function EvidenceWorkbenchPage() {
 
   const verifiedCount = matrix.filter((m) => m.status === 'VERIFIED_EVIDENCE').length;
   const gapCount = matrix.filter((m) => m.status === 'UNSUPPORTED_GAP').length;
-  const coverageRate = matrix.length > 0 ? Math.round((verifiedCount / matrix.length) * 100) : 67;
+  // Computed from the scan only: an empty matrix is 0%, never a sample figure.
+  const coverageRate = matrix.length > 0 ? Math.round((verifiedCount / matrix.length) * 100) : 0;
+  const preview = isPreviewReport(report);
 
   return (
     <div className="space-y-8 pb-12">
@@ -113,7 +139,7 @@ export default function EvidenceWorkbenchPage() {
           </p>
         </div>
 
-        {report && (
+        {report && !isEphemeralReport(report) && (
           <Link
             href={`/reports/${report.id}`}
             className="flex items-center space-x-1.5 rounded-xl border border-zinc-700 bg-zinc-800/80 px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition self-start md:self-auto shadow"
@@ -136,7 +162,8 @@ export default function EvidenceWorkbenchPage() {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ZeroRetentionToggle enabled={ephemeral} onChange={setEphemeral} disabled={isLoading} />
             <button
               onClick={handleLoadSample}
               className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition"
@@ -158,44 +185,51 @@ export default function EvidenceWorkbenchPage() {
         {/* Dual Dropzone Containers */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Dropzone 1: Questionnaire */}
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-800 bg-[#0d0e14] p-6 text-center hover:border-zinc-700 transition">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400 mb-2 border border-blue-500/20">
-              <FileSpreadsheet className="h-5 w-5" />
-            </div>
-            <span className="text-xs font-bold text-zinc-200">
-              Dropzone 1: Security Questionnaire
-            </span>
-            <p className="text-[11px] text-zinc-500 mt-1">
-              CSV, XLSX, or JSON vendor questionnaire
-            </p>
-            <div className="mt-3 rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1 text-xs font-mono text-blue-300 flex items-center space-x-1.5">
-              <File className="h-3.5 w-3.5" />
-              <span>{questionnaireFile}</span>
-            </div>
-          </div>
+          <FileDropzone
+            files={questionnaireFiles}
+            onFilesChange={setQuestionnaireFiles}
+            product="evidence"
+            accept=".csv,.xlsx"
+            title="Dropzone 1: Security Questionnaire"
+            acceptLabel="CSV or XLSX vendor questionnaire (max 15 MB)"
+          />
 
           {/* Dropzone 2: Evidence Documents */}
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-800 bg-[#0d0e14] p-6 text-center hover:border-zinc-700 transition">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 mb-2 border border-emerald-500/20">
-              <FileText className="h-5 w-5" />
-            </div>
-            <span className="text-xs font-bold text-zinc-200">
-              Dropzone 2: Policy & SOC 2 Documents
-            </span>
-            <p className="text-[11px] text-zinc-500 mt-1">
-              Information Security Policy, SOC 2 Type II report, AWS KMS docs
-            </p>
-            <div className="mt-3 rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1 text-xs font-mono text-emerald-300 flex items-center space-x-1.5">
-              <FileText className="h-3.5 w-3.5" />
-              <span>{evidenceDocFile}</span>
-            </div>
-          </div>
+          <FileDropzone
+            files={policyFiles}
+            onFilesChange={setPolicyFiles}
+            product="evidence"
+            accept=".pdf,.md,.txt"
+            title="Dropzone 2: Policy & SOC 2 Documents"
+            acceptLabel="Information Security Policy, SOC 2 Type II report — PDF, MD, or TXT (max 15 MB)"
+          />
         </div>
+
+        {/* Failures surface here with Retry, never as sample data */}
+        <ApiErrorNotice
+          error={scanError}
+          onRetry={scanError !== null && scanError.status !== null ? handleRunScan : undefined}
+        />
       </div>
+
+      {!report && !isLoading && (
+        <EmptyReportState description="Upload a questionnaire and policy documents above, then map the questionnaire. Results from your own documents appear here; no sample results are shown." />
+      )}
 
       {/* Results Section */}
       {report && (
         <div className="space-y-6">
+          <ReportFlags report={report} />
+          {preview && <PreviewLockedPanel report={report} />}
+
+          {preview ? (
+            // The evidence matrix (and every figure derived from it) is withheld in a preview.
+            <LockedPlaceholder
+              title="Evidence mapping table"
+              description="Per-question answers, coverage figures and exact policy citations come with the full report."
+            />
+          ) : (
+            <>
           {/* Metrics Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
@@ -393,7 +427,16 @@ export default function EvidenceWorkbenchPage() {
             </div>
           </div>
 
+            </>
+          )}
+
           {/* Fix Prompts */}
+          {preview && (
+            <LockedPlaceholder
+              title="Policy remediation prompts"
+              description="Copy-paste prompts that close each evidence gap come with the full report."
+            />
+          )}
           {report.remediation_prompts && report.remediation_prompts.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-zinc-200 flex items-center gap-1.5">
@@ -411,7 +454,8 @@ export default function EvidenceWorkbenchPage() {
           {/* Findings Table */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-zinc-200">
-              Deterministic Gap Flags ({report.findings.length})
+              Deterministic Gap Flags (
+              {preview ? `top ${report.findings.length} of ${report.summary.total_findings}` : report.findings.length})
             </h3>
             <FindingsTable
               findings={report.findings}

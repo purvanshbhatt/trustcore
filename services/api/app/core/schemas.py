@@ -124,6 +124,32 @@ class ScanRequest(BaseModel):
     files: List[ScanInputFile] = []
     raw_content: Optional[str] = None
     options: Dict[str, Any] = Field(default_factory=dict)
+    ephemeral: bool = Field(
+        False,
+        description="Zero-Retention Mode: run the scan in memory and return the report without persisting inputs or findings",
+    )
+
+
+class IngestSkippedFile(BaseModel):
+    path: str = Field(..., description="Path of the skipped entry inside the upload or archive")
+    reason: str = Field(
+        ...,
+        description="'excluded_directory', 'binary', 'too_large', 'file_limit', 'size_limit', 'not_a_regular_file', or 'encrypted'",
+    )
+
+
+class IngestResponse(BaseModel):
+    source: str = Field(..., description="'upload' or 'github:<owner>/<repo>@<ref>'")
+    files: List[ScanInputFile] = Field(default_factory=list, description="Extracted text files ready to pass to POST /run/{product}")
+    skipped: List[IngestSkippedFile] = Field(default_factory=list, description="Sample of skipped entries (capped)")
+    skipped_count: int = Field(0, description="Total number of skipped entries")
+    total_bytes: int = Field(0, description="Total UTF-8 size of the extracted text")
+    truncated: bool = Field(False, description="True when file-count or size limits dropped part of the input")
+
+
+class GithubIngestRequest(BaseModel):
+    repo_url: str = Field(..., description="Public repository URL, e.g. https://github.com/owner/repo")
+    ref: Optional[str] = Field(None, description="Branch, tag, or commit SHA (defaults to the default branch)")
 
 
 class BillingTier(str, Enum):
@@ -146,7 +172,9 @@ class BillingCheckoutResponse(BaseModel):
 
 
 class BillingStatusResponse(BaseModel):
-    tier: str
+    tier: str = Field(..., description="'free', 'per_scan', 'pro_monthly', or 'enterprise'")
     credits_remaining: int
     is_mock: bool
     subscription_active: bool
+    free_preview_available: bool = Field(True, description="The one free preview scan has not been used yet")
+    can_run_full_scan: bool = Field(False, description="An active subscription or at least one scan credit")

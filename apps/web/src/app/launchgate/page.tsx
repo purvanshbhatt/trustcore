@@ -16,7 +16,6 @@ import {
   Archive,
   Code2,
   FileText,
-  UploadCloud,
   Check,
   Copy,
   Terminal,
@@ -26,17 +25,27 @@ import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
 import { LiveScanTerminal } from '@/components/LiveScanTerminal';
 import { CodeDiffPreview } from '@/components/CodeDiffPreview';
-import { ScanInputFile, Report, SourceCitation } from '@/lib/types';
-import { runScan, getSampleData } from '@/lib/api';
+import { FileDropzone } from '@/components/FileDropzone';
+import { ZeroRetentionToggle } from '@/components/ZeroRetentionToggle';
+import { ReportFlags, isEphemeralReport } from '@/components/ReportFlags';
+import { ApiErrorNotice } from '@/components/ApiErrorNotice';
+import { PreviewLockedPanel, LockedPlaceholder } from '@/components/PreviewLock';
+import { IllustrativeExample, EmptyReportState } from '@/components/DemoNotice';
+import { ScanInputFile, Report, SourceCitation, isPreviewReport } from '@/lib/types';
+import { runScan, getSampleData, ingestGithub, isMockEnabled, isDemoReport, toUiError, type UiError } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
 import { useABExperiment } from '@/lib/abTesting';
+import { useBilling } from '@/lib/billing';
 
 export default function LaunchGatePage() {
   const { remediationFormat, setRemediationFormat } = useABExperiment();
   const [inputMode, setInputMode] = useState<'sample' | 'github' | 'zip' | 'snippet'>('sample');
-  const [githubUrl, setGithubUrl] = useState('https://github.com/lovable-dev/saas-starter-template');
-  const [githubBranch, setGithubBranch] = useState('main');
-  const [zipFileName, setZipFileName] = useState<string | null>(null);
+  const [githubUrl, setGithubUrl] = useState('');
+  const [githubBranch, setGithubBranch] = useState('');
+  const [stagedFiles, setStagedFiles] = useState<ScanInputFile[]>([]);
+  const [ephemeral, setEphemeral] = useState(false);
+  const [scanError, setScanError] = useState<UiError | null>(null);
+  const [ingestNote, setIngestNote] = useState<string | null>(null);
   const [codeSnippet, setCodeSnippet] = useState(`// Leaked keys & open RLS policy snippet
 const OPENAI_API_KEY = "sk-proj-49f993a89bc2138947b198274a9b8c7d6e5f4a3b2c1d";
 const SUPABASE_SERVICE_ROLE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9...";
@@ -47,9 +56,11 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
   const [snippetFilename, setSnippetFilename] = useState('client-api.ts');
 
   const [projectName, setProjectName] = useState('Lovable SaaS Starter');
-  const [report, setReport] = useState<Report | null>(MOCK_REPORTS.launchgate);
+  // Live mode starts empty: the demo report is preloaded only when NEXT_PUBLIC_USE_MOCK=true.
+  const [report, setReport] = useState<Report | null>(isMockEnabled() ? MOCK_REPORTS.launchgate : null);
   const [isLoading, setIsLoading] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
+  const { refresh: refreshBilling } = useBilling();
 
   // Citation Drawer state
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
@@ -58,6 +69,31 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const handleRunScan = async () => {
+    setScanError(null);
+    setIngestNote(null);
+
+    if (inputMode === 'zip' && stagedFiles.length === 0) {
+      setScanError({
+        status: null,
+        message: 'Stage a .zip export or source files in the dropzone before running the scan.',
+      });
+      return;
+    }
+    if (inputMode === 'github') {
+      if (!githubUrl.trim()) {
+        setScanError({ status: null, message: 'Enter a public GitHub repository URL.' });
+        return;
+      }
+      if (isMockEnabled()) {
+        setScanError({
+          status: null,
+          message:
+            'GitHub ingestion needs the live API: set NEXT_PUBLIC_USE_MOCK=false and start the TrustCore API.',
+        });
+        return;
+      }
+    }
+
     setIsLoading(true);
     setShowTerminal(true);
     try {
@@ -71,22 +107,18 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
           },
         ];
       } else if (inputMode === 'github') {
-        scanFiles = [
-          {
-            filename: 'src/lib/api-client.ts',
-            content: codeSnippet,
-          },
-          {
-            filename: '.env.production',
-            content:
-              'STRIPE_SECRET_KEY=sk_test_51M0CKSTRIPEKEY99283746152433\nNEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=ey...',
-          },
-          {
-            filename: 'package.json',
-            content:
-              '{\n  "dependencies": {\n    "auth0-next-toolkit": "^1.0.4",\n    "react-domm": "^18.2.0"\n  }\n}',
-          },
-        ];
+        const ingested = await ingestGithub(githubUrl, githubBranch);
+        if (ingested.files.length === 0) {
+          throw new Error('No scannable text files were found in that repository.');
+        }
+        scanFiles = ingested.files;
+        setIngestNote(
+          `Fetched ${ingested.files.length} file${ingested.files.length === 1 ? '' : 's'} from ${ingested.source}` +
+            (ingested.skipped_count > 0 ? ` • skipped ${ingested.skipped_count}` : '') +
+            (ingested.truncated ? ' • truncated at the ingestion limit' : '')
+        );
+      } else if (inputMode === 'zip') {
+        scanFiles = stagedFiles;
       } else {
         const sample = await getSampleData('launchgate');
         scanFiles = sample.files || [];
@@ -96,28 +128,43 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
         product: 'launchgate',
         project_name: projectName,
         files: scanFiles,
+        ephemeral,
       });
       setReport(res);
     } catch (err) {
       console.error('Scan failed:', err);
+      setShowTerminal(false);
+      setScanError(toUiError(err));
     } finally {
       setIsLoading(false);
+      // A scan spends a credit or the free preview: re-read the plan.
+      void refreshBilling();
     }
   };
+
+  const preview = isPreviewReport(report);
+  // Fixed built-in widgets are only "the result" for demo data; on a live report they are labelled examples.
+  const isDemo = report !== null && isDemoReport(report);
+  // CodeDiffPreview renders one fixed before/after diff; it is not generated from the scan.
+  const codeDiffExample = isDemo ? (
+    <CodeDiffPreview />
+  ) : (
+    <IllustrativeExample>
+      <CodeDiffPreview />
+    </IllustrativeExample>
+  );
+  const readinessTone =
+    report?.summary.readiness_status === 'PASSED'
+      ? 'text-emerald-400'
+      : report?.summary.readiness_status === 'WARNING'
+      ? 'text-yellow-400'
+      : 'text-red-400';
 
   const handleOpenCitation = (citation: SourceCitation, ruleId: string, title: string) => {
     setActiveCitation(citation);
     setActiveRuleId(ruleId);
     setActiveFindingTitle(title);
     setIsDrawerOpen(true);
-  };
-
-  const handleZipDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setZipFileName(e.dataTransfer.files[0].name);
-      setProjectName(e.dataTransfer.files[0].name.replace('.zip', ''));
-    }
   };
 
   return (
@@ -137,7 +184,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
           </p>
         </div>
 
-        {report && (
+        {report && !isEphemeralReport(report) && (
           <Link
             href={`/reports/${report.id}`}
             className="flex items-center space-x-1.5 rounded-xl border border-zinc-700 bg-zinc-800/80 px-3.5 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition self-start md:self-auto shadow"
@@ -160,7 +207,8 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ZeroRetentionToggle enabled={ephemeral} onChange={setEphemeral} disabled={isLoading} />
             <input
               type="text"
               placeholder="Project Name"
@@ -267,7 +315,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
               <label className="text-xs text-zinc-400">Branch</label>
               <input
                 type="text"
-                placeholder="main"
+                placeholder="default branch"
                 value={githubBranch}
                 onChange={(e) => setGithubBranch(e.target.value)}
                 className="w-full rounded-lg border border-zinc-800 bg-[#090a0f] py-2 px-3 text-xs text-zinc-200 focus:border-blue-500 focus:outline-none font-mono"
@@ -278,19 +326,13 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
 
         {/* Tab 3: ZIP Upload */}
         {inputMode === 'zip' && (
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleZipDrop}
-            className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-800 bg-[#0d0e14] p-8 text-center"
-          >
-            <UploadCloud className="h-8 w-8 text-blue-400 mb-2" />
-            <h4 className="text-sm font-semibold text-zinc-200">
-              {zipFileName ? `Staged: ${zipFileName}` : 'Drop Cursor or Lovable Export .zip file'}
-            </h4>
-            <p className="mt-1 text-xs text-zinc-500">
-              Automatic AST unzipping and in-memory scan (max 50MB)
-            </p>
-          </div>
+          <FileDropzone
+            files={stagedFiles}
+            onFilesChange={setStagedFiles}
+            product="launchgate"
+            title="Drop Cursor or Lovable Export .zip file"
+            acceptLabel="ZIP repo export or source/config files • in-memory scan (max 15 MB) • node_modules, .git and binaries skipped"
+          />
         )}
 
         {/* Tab 4: Code Snippet */}
@@ -313,16 +355,31 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
             />
           </div>
         )}
+
+        {/* Scan / ingestion status: failures surface here with Retry, never as sample data */}
+        <ApiErrorNotice
+          error={scanError}
+          onRetry={scanError !== null && scanError.status !== null ? handleRunScan : undefined}
+        />
+        {ingestNote && (
+          <p className="text-xs font-mono text-zinc-400">{ingestNote}</p>
+        )}
       </div>
 
-      {/* Live Scan Terminal Simulator Widget */}
-      {showTerminal && (
+      {/* Live Scan Terminal Simulator Widget (scripted demo output: mock mode only) */}
+      {showTerminal && isMockEnabled() && (
         <LiveScanTerminal product="LaunchGate" />
+      )}
+
+      {!report && !isLoading && (
+        <EmptyReportState description="Choose an ingestion mode above and run LaunchGate. Findings from your own code appear here; no sample results are shown." />
       )}
 
       {/* Severity Summary Cards */}
       {report && (
         <div className="space-y-6">
+          <ReportFlags report={report} />
+          {preview && <PreviewLockedPanel report={report} />}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
               <div className="flex items-center justify-between">
@@ -334,7 +391,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
               <p className="mt-2 text-3xl font-extrabold text-white font-mono">
                 {report.summary.critical_count}
               </p>
-              <span className="text-[10px] text-zinc-400">Leaked API keys & open RLS</span>
+              <span className="text-[10px] text-zinc-400">Secrets, open RLS, exposed keys</span>
             </div>
 
             <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
@@ -347,7 +404,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
               <p className="mt-2 text-3xl font-extrabold text-white font-mono">
                 {report.summary.high_count}
               </p>
-              <span className="text-[10px] text-zinc-400">Hallucinated packages</span>
+              <span className="text-[10px] text-zinc-400">Unverified packages & risky config</span>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
@@ -355,12 +412,16 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                   Readiness Score
                 </span>
-                <span className="text-xs font-bold text-red-400 font-mono">BLOCKED</span>
+                <span className={`text-xs font-bold font-mono ${readinessTone}`}>
+                  {report.summary.readiness_status}
+                </span>
               </div>
-              <p className="mt-2 text-3xl font-extrabold text-red-400 font-mono">
+              <p className={`mt-2 text-3xl font-extrabold font-mono ${readinessTone}`}>
                 {report.summary.risk_score}<span className="text-base text-zinc-500">/100</span>
               </p>
-              <span className="text-[10px] text-zinc-400">Pre-launch gate blocked</span>
+              <span className="text-[10px] text-zinc-400">
+                Pre-launch gate {report.summary.readiness_status.toLowerCase()}
+              </span>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
@@ -416,9 +477,14 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
               </div>
             </div>
 
-            {remediationFormat === 'diff_stream' ? (
+            {preview ? (
+              <LockedPlaceholder
+                title="Fix prompts"
+                description="Copy-paste remediation prompts for Cursor, Claude and Lovable come with the full report."
+              />
+            ) : remediationFormat === 'diff_stream' ? (
               <div className="space-y-4">
-                <CodeDiffPreview />
+                {codeDiffExample}
                 {report.remediation_prompts && report.remediation_prompts.length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                     {report.remediation_prompts.map((p, idx) => (
@@ -436,7 +502,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
                     ))}
                   </div>
                 )}
-                <CodeDiffPreview />
+                {codeDiffExample}
               </div>
             )}
           </div>
@@ -444,7 +510,8 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
           {/* Findings Table */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-zinc-200">
-              Deterministic Vulnerability Findings ({report.findings.length})
+              Deterministic Vulnerability Findings (
+              {preview ? `top ${report.findings.length} of ${report.summary.total_findings}` : report.findings.length})
             </h3>
             <FindingsTable
               findings={report.findings}

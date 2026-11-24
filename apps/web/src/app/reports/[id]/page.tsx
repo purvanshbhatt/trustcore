@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   FileText,
   Download,
   Printer,
   Share2,
+  Trash2,
   ArrowLeft,
   CheckCircle2,
   ShieldAlert,
@@ -19,22 +20,31 @@ import {
   Copy,
   Check,
   FileCode,
+  Lock,
 } from 'lucide-react';
-import { Report, SourceCitation } from '@/lib/types';
-import { getReport } from '@/lib/api';
+import { Report, SourceCitation, isPreviewReport } from '@/lib/types';
+import { getReport, deleteReport, isDemoReport, toUiError, type UiError } from '@/lib/api';
+import { PreviewLockedPanel, LockedPlaceholder } from '@/components/PreviewLock';
 import { FindingsTable } from '@/components/FindingsTable';
 import { CitationDrawer } from '@/components/CitationDrawer';
 import { FixPromptCard } from '@/components/FixPromptCard';
 import { SecurityGauge } from '@/components/SecurityGauge';
-import { MOCK_REPORTS } from '@/lib/mockData';
+import { ApiErrorNotice } from '@/components/ApiErrorNotice';
+import { ReportFlags } from '@/components/ReportFlags';
 
 export default function ReportViewerPage() {
   const params = useParams();
+  const router = useRouter();
   const reportId = (params?.id as string) || 'rpt_lg_demo_7721';
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<UiError | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<UiError | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  // Bumped by the Retry button to re-run the load effect.
+  const [reloadToken, setReloadToken] = useState(0);
 
   // Citation Drawer state
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
@@ -43,19 +53,55 @@ export default function ReportViewerPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   useEffect(() => {
+    let active = true;
     async function load() {
       setLoading(true);
+      setLoadError(null);
       try {
         const rep = await getReport(reportId);
-        setReport(rep);
-      } catch {
-        setReport(MOCK_REPORTS.launchgate);
+        if (active) {
+          setReport(rep);
+        }
+      } catch (err) {
+        // 401/403/404 and other API errors: never substitute demo findings for a real report id.
+        if (active) {
+          setReport(null);
+          setLoadError(toUiError(err));
+        }
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
     load();
-  }, [reportId]);
+    return () => {
+      active = false;
+    };
+  }, [reportId, reloadToken]);
+
+  const handleReload = () => setReloadToken((token) => token + 1);
+
+  // Preview reports withhold citations and fix prompts, so exporting them is locked too.
+  const preview = isPreviewReport(report);
+
+  const handleDeleteReport = async () => {
+    if (!report || isDeleting) return;
+    const confirmed = window.confirm(
+      'Delete this report permanently? This removes it from your account and cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    setDeleteError(null);
+    setIsDeleting(true);
+    try {
+      await deleteReport(report.id);
+      router.push('/' + report.product);
+    } catch (err) {
+      setDeleteError(toUiError(err));
+      setIsDeleting(false);
+    }
+  };
 
   const handleOpenCitation = (citation: SourceCitation, ruleId: string, title: string) => {
     setActiveCitation(citation);
@@ -65,7 +111,7 @@ export default function ReportViewerPage() {
   };
 
   const handleExportJSON = () => {
-    if (!report) return;
+    if (!report || preview) return;
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -76,7 +122,7 @@ export default function ReportViewerPage() {
   };
 
   const handleExportMarkdown = () => {
-    if (!report) return;
+    if (!report || preview) return;
     const md = [
       `# TrustCore Security & Readiness Report`,
       `**Report ID:** \`${report.id}\`  `,
@@ -129,6 +175,7 @@ export default function ReportViewerPage() {
   };
 
   const handlePrint = () => {
+    if (preview) return;
     window.print();
   };
 
@@ -152,15 +199,29 @@ export default function ReportViewerPage() {
   }
 
   if (!report) {
+    const isNotFound = loadError === null || loadError.status === 404 || loadError.status === 403;
     return (
       <div className="p-8 text-center space-y-3">
-        <h3 className="text-base font-semibold text-zinc-200">Report Not Found</h3>
+        <h3 className="text-base font-semibold text-zinc-200">
+          {isNotFound ? 'Report Not Found' : 'Report Unavailable'}
+        </h3>
+        {isNotFound ? (
+          <p className="text-xs text-zinc-400">
+            This report does not exist, was deleted, or belongs to another account.
+          </p>
+        ) : (
+          // Load failures show the real error with Retry; a sample report is never shown in its place.
+          <ApiErrorNotice error={loadError} onRetry={handleReload} className="mx-auto max-w-md text-left" />
+        )}
         <Link href="/" className="inline-block text-xs text-blue-400 hover:underline">
           Return to Overview Hub
         </Link>
       </div>
     );
   }
+
+  const canDelete = !isDemoReport(report);
+  const exportLockedTitle = 'Exports unlock with the full report';
 
   return (
     <div className="space-y-8 pb-16 print:p-0">
@@ -192,34 +253,55 @@ export default function ReportViewerPage() {
             )}
           </button>
 
+          {/* Exports are locked for free-preview reports */}
           <button
             onClick={handleExportMarkdown}
-            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
+            disabled={preview}
+            title={preview ? exportLockedTitle : undefined}
+            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-zinc-900/60 disabled:hover:text-zinc-300"
           >
-            <Download className="h-3.5 w-3.5" />
+            {preview ? <Lock className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
             <span>Export Markdown</span>
           </button>
 
           <button
             onClick={handleExportJSON}
-            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
+            disabled={preview}
+            title={preview ? exportLockedTitle : undefined}
+            className="flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-zinc-900/60 disabled:hover:text-zinc-300"
           >
-            <FileText className="h-3.5 w-3.5" />
+            {preview ? <Lock className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
             <span>Export JSON</span>
           </button>
 
           <button
             onClick={handlePrint}
-            className="flex items-center space-x-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 shadow transition"
+            disabled={preview}
+            title={preview ? exportLockedTitle : undefined}
+            className="flex items-center space-x-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 shadow transition disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-blue-600"
           >
-            <Printer className="h-3.5 w-3.5" />
+            {preview ? <Lock className="h-3.5 w-3.5" /> : <Printer className="h-3.5 w-3.5" />}
             <span>Print / PDF</span>
           </button>
+
+          {canDelete && (
+            <button
+              onClick={handleDeleteReport}
+              disabled={isDeleting}
+              className="flex items-center space-x-1.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20 disabled:opacity-50 transition"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>{isDeleting ? 'Deleting…' : 'Delete Report'}</span>
+            </button>
+          )}
         </div>
       </div>
 
+      <ApiErrorNotice error={deleteError} className="print:hidden" />
+
       {/* Report Header */}
       <div className="space-y-2">
+        <ReportFlags report={report} />
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-mono text-zinc-400">{report.id}</span>
           <span className="text-zinc-600">•</span>
@@ -233,6 +315,9 @@ export default function ReportViewerPage() {
           {report.title}
         </h1>
       </div>
+
+      {/* Free preview: what is withheld, with the unlock action (the gauge is in the banner below) */}
+      {preview && <PreviewLockedPanel report={report} showGauge={false} />}
 
       {/* Readiness Status Banner with Security Gauge */}
       <div
@@ -298,6 +383,20 @@ export default function ReportViewerPage() {
           {report.executive_summary}
         </div>
       </div>
+
+      {/* Preview: fix prompts and product detail views are withheld, never replaced with sample content */}
+      {preview && (
+        <div className="space-y-3 print:hidden">
+          <LockedPlaceholder
+            title="Fix prompts"
+            description="Copy-paste remediation prompts come with the full report."
+          />
+          <LockedPlaceholder
+            title="Detailed views"
+            description="Permission diff, evidence matrix and eval results come with the full report."
+          />
+        </div>
+      )}
 
       {/* Copy-Paste Remediation Prompts */}
       {report.remediation_prompts && report.remediation_prompts.length > 0 && (
@@ -430,9 +529,12 @@ export default function ReportViewerPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-zinc-100">
-            Deterministic Source-Cited Findings ({report.findings.length})
+            Deterministic Source-Cited Findings (
+            {preview ? `top ${report.findings.length} of ${report.summary.total_findings}` : report.findings.length})
           </h2>
-          <span className="text-xs text-zinc-500 font-mono">Click row to open exact snippet</span>
+          <span className="text-xs text-zinc-500 font-mono">
+            {preview ? 'Exact snippets unlock with the full report' : 'Click row to open exact snippet'}
+          </span>
         </div>
 
         <FindingsTable

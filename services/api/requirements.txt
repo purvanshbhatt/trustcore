@@ -7,3 +7,13 @@ stripe>=8.0.0
 httpx>=0.27.0
 pyyaml>=6.0.1
 pytest>=8.0.0
+# Phase 2A: auth, per-user storage, ingestion (pinned)
+PyJWT[crypto]==2.15.1
+SQLAlchemy==2.1.9
+psycopg[binary]==3.3.9
+openpyxl==3.1.5
+pypdf==7.1.1
+defusedxml==0.7.1
+# Phase 2B: rate limiting, live Engine 2 (pinned)
+slowapi==0.1.10
+google-genai==3.6.1
