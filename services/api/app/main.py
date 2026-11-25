@@ -94,9 +94,13 @@ async def storage_error_handler(request: Request, exc: StorageError) -> JSONResp
 
 @app.get("/health", tags=["health"])
 @app.get("/api/v1/health", tags=["health"])
-def healthcheck():
+def healthcheck(request: Request):
     """Service health and capability status."""
+    forwarded = ",".join(request.headers.getlist("x-forwarded-for"))
     return {
+        # How many X-Forwarded-For entries reached the app. Called from a client that sends
+        # no such header, this is the proxy count to configure as TRUSTED_PROXY_HOPS.
+        "forwarded_for_entries": len([entry for entry in forwarded.split(",") if entry.strip()]),
         "status": "healthy",
         "service": "TrustCore Engine",
         "version": "1.0.0",

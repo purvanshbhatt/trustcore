@@ -1,355 +1,477 @@
-'use client';
-
-import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  Rocket,
-  Cpu,
-  FileSpreadsheet,
-  CheckSquare,
-  ShieldAlert,
   ArrowRight,
+  Ban,
+  Check,
+  CheckSquare,
+  ClipboardCopy,
+  Cpu,
+  EyeOff,
+  FileSearch,
+  FileSpreadsheet,
+  KeyRound,
+  Rocket,
   ShieldCheck,
-  CheckCircle2,
-  FileCode,
-  Zap,
-  Lock,
-  Sparkles,
-  Layers,
-  ChevronRight,
-  Terminal,
+  UploadCloud,
+  type LucideIcon,
 } from 'lucide-react';
-import { SecurityGauge } from '@/components/SecurityGauge';
-import { IllustrativeExample } from '@/components/DemoNotice';
+import { PricingCards } from '@/components/PricingCards';
+import { MOCK_REPORTS } from '@/lib/mockData';
+import type { Severity } from '@/lib/types';
 
-// Read the flag directly so the hub does not pull the API client into its bundle.
-const isMockEnabled = (): boolean => process.env.NEXT_PUBLIC_USE_MOCK === 'true';
-import { FreeToolsSection } from '@/components/FreeToolsSection';
-import { useABExperiment } from '@/lib/abTesting';
+const HEADLINE =
+  'Ship AI-Built Apps & Agents Without Leaking Keys, Breaking Rules, or Failing Security Reviews.';
 
-export default function OverviewHubPage() {
-  const { ctaVariant, trackCtaClick } = useABExperiment();
+const DESCRIPTION =
+  'Deterministic security and readiness checks for AI-built apps and agents: leaked secrets, open Supabase/Firebase RLS, hallucinated packages, MCP permissions, security questionnaires and prompt-injection evals. Every finding cites its source.';
 
-  const tools = [
-    {
-      id: 'launchgate',
-      title: 'LaunchGate',
-      category: 'Pre-Launch Security Gate',
-      tagline: 'Cursor, Lovable & Replit App Gate',
-      description:
-        'Detect hardcoded secrets, open Supabase/Firebase RLS policies, and hallucinated npm/pip packages before going live.',
-      href: '/launchgate',
-      icon: Rocket,
-      badge: 'Engine 1 AST/Regex',
-      color: 'from-blue-600 to-cyan-600',
-      sampleRisk: 'Score 35/100 (Blocked)',
-      status: 'BLOCKED',
-      findingsCount: 4,
-    },
-    {
-      id: 'agentscope',
-      title: 'AgentScope',
-      category: 'MCP & Permissions Auditor',
-      tagline: 'Agent Tool & Scope Blast Radius Limiter',
-      description:
-        'Audit MCP configs (Claude Desktop, custom agents) for wildcard permissions, plaintext keys, and generate least-privilege diffs.',
-      href: '/agentscope',
-      icon: Cpu,
-      badge: 'Least-Privilege Diff',
-      color: 'from-purple-600 to-indigo-600',
-      sampleRisk: 'Score 42/100 (Blocked)',
-      status: 'BLOCKED',
-      findingsCount: 3,
-    },
-    {
-      id: 'evidence',
-      title: 'Evidence-to-Answer',
-      category: 'Security Questionnaires',
-      tagline: 'Zero-Hallucination SOC 2 Workbench',
-      description:
-        'Map questionnaires against policy and SOC 2 documents. Automatically source citations for verified answers and explicitly flag gaps.',
-      href: '/evidence',
-      icon: FileSpreadsheet,
-      badge: 'Zero-Hallucination Gaps',
-      color: 'from-emerald-600 to-teal-600',
-      sampleRisk: 'Score 70/100 (Warning)',
-      status: 'WARNING',
-      findingsCount: 2,
-    },
-    {
-      id: 'evalkit',
-      title: 'EvalKit',
-      category: 'Evals & Prompt Injections',
-      tagline: 'Workflow Regression & Injection Runner',
-      description:
-        'Run deterministic test cases and adversarial prompt injections (canary leaks, jailbreaks, tool hijacks) with client acceptance reports.',
-      href: '/evalkit',
-      icon: CheckSquare,
-      badge: 'Canary Exfil Test',
-      color: 'from-amber-600 to-orange-600',
-      sampleRisk: 'Score 45/100 (Blocked)',
-      status: 'BLOCKED',
-      findingsCount: 3,
-    },
-  ];
+export const metadata: Metadata = {
+  title: 'TrustCore — Security checks for AI-built apps and agents',
+  description: DESCRIPTION,
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: HEADLINE,
+    description: DESCRIPTION,
+    url: '/',
+    siteName: 'TrustCore',
+    type: 'website',
+  },
+};
 
-  // A/B CTA experiment mapping
-  const getHeroCta = () => {
-    switch (ctaVariant) {
-      case 'variant_a_speed':
-        return {
-          label: 'Run 60-Second AI Security Scan',
-          href: '/launchgate',
-          sub: 'Free instant heuristic check',
-        };
-      case 'variant_b_mcp':
-        return {
-          label: 'Audit Agent MCP Permissions & Blast Radius',
-          href: '/agentscope',
-          sub: 'Generates least-privilege diff',
-        };
-      case 'variant_c_soc2':
-      default:
-        return {
-          label: 'Map SOC 2 Evidence & Solve Questionnaires',
-          href: '/evidence',
-          sub: 'Zero hallucination gap flags',
-        };
-    }
-  };
+interface ProductCard {
+  readonly name: string;
+  readonly kicker: string;
+  readonly description: string;
+  readonly checks: readonly string[];
+  readonly href: string;
+  readonly cta: string;
+  readonly icon: LucideIcon;
+  readonly iconClass: string;
+  readonly linkClass: string;
+}
 
-  const heroCta = getHeroCta();
+const PRODUCTS: readonly ProductCard[] = [
+  {
+    name: 'LaunchGate',
+    kicker: 'Pre-launch gate',
+    description: 'Run it on the app you are about to ship, before anyone else finds what the AI left behind.',
+    checks: ['Leaked secrets and API keys', 'Open Supabase / Firebase RLS', 'Hallucinated packages'],
+    href: '/launchgate',
+    cta: 'Open LaunchGate',
+    icon: Rocket,
+    iconClass: 'border-blue-500/25 bg-blue-500/10 text-blue-400',
+    linkClass: 'text-blue-400 hover:text-blue-300',
+  },
+  {
+    name: 'AgentScope',
+    kicker: 'MCP / agent permission audit',
+    description: 'Upload an MCP or agent config and see what the agent is actually allowed to touch.',
+    checks: ['Wildcard scopes and broad mounts', 'Plaintext keys in config', 'Least-privilege diff'],
+    href: '/agentscope',
+    cta: 'Open AgentScope',
+    icon: Cpu,
+    iconClass: 'border-purple-500/25 bg-purple-500/10 text-purple-400',
+    linkClass: 'text-purple-400 hover:text-purple-300',
+  },
+  {
+    name: 'Evidence-to-Answer',
+    kicker: 'Security questionnaires',
+    description: 'Answer a security questionnaire from your own policy documents instead of from memory.',
+    checks: ['Answers with exact citations', 'Unsupported questions flagged as gaps', 'Evidence and gap matrix'],
+    href: '/evidence',
+    cta: 'Open Evidence-to-Answer',
+    icon: FileSpreadsheet,
+    iconClass: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400',
+    linkClass: 'text-emerald-400 hover:text-emerald-300',
+  },
+  {
+    name: 'EvalKit',
+    kicker: 'Prompt-injection and regression evals',
+    description: 'Test a system prompt against adversarial inputs and catch regressions between versions.',
+    checks: ['Prompt-injection and jailbreak cases', 'Canary-leak and tool-hijack checks', 'Regression evals'],
+    href: '/evalkit',
+    cta: 'Open EvalKit',
+    icon: CheckSquare,
+    iconClass: 'border-amber-500/25 bg-amber-500/10 text-amber-400',
+    linkClass: 'text-amber-400 hover:text-amber-300',
+  },
+];
 
+interface Step {
+  readonly title: string;
+  readonly body: string;
+  readonly icon: LucideIcon;
+}
+
+const STEPS: readonly Step[] = [
+  {
+    title: 'Upload, or point at a public GitHub repo',
+    body: 'Drop a ZIP export or individual files, paste a snippet, or enter a public GitHub repository URL. Files are parsed in memory.',
+    icon: UploadCloud,
+  },
+  {
+    title: 'Deterministic rules produce cited findings',
+    body: 'Findings, severities and the readiness score come from deterministic rules. Each finding cites the file, the line and the rule behind it.',
+    icon: FileSearch,
+  },
+  {
+    title: 'Copy-paste fix prompts',
+    body: 'The full report includes fix prompts written for Cursor, Lovable, Claude Code and the terminal. Paste one in, apply the fix, scan again.',
+    icon: ClipboardCopy,
+  },
+];
+
+interface TrustPoint {
+  readonly title: string;
+  readonly body: string;
+  readonly icon: LucideIcon;
+}
+
+/** Each statement is taken from /security; keep the two in sync. */
+const TRUST_POINTS: readonly TrustPoint[] = [
+  {
+    title: 'Parsed in memory',
+    body: 'Uploads and GitHub archives are never written to disk or stored.',
+    icon: EyeOff,
+  },
+  {
+    title: 'Zero-Retention Mode',
+    body: 'The scan runs in memory and the report is returned but never stored.',
+    icon: ShieldCheck,
+  },
+  {
+    title: 'Secrets masked',
+    body: 'Detected credentials are masked before a report is returned, stored or sent to the AI layer.',
+    icon: KeyRound,
+  },
+  {
+    title: 'No model training',
+    body: 'Your code, uploads and reports are not used to train models.',
+    icon: Ban,
+  },
+];
+
+const SEVERITY_CHIP: Record<Severity, string> = {
+  CRITICAL: 'border-red-500/40 bg-red-500/10 text-red-300',
+  HIGH: 'border-orange-500/40 bg-orange-500/10 text-orange-300',
+  MEDIUM: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300',
+  LOW: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
+  INFO: 'border-zinc-700 bg-zinc-800 text-zinc-300',
+};
+
+// The hero excerpt is built from the bundled sample report, so it always matches /sample's built-in data.
+const EXCERPT_REPORT = MOCK_REPORTS.launchgate;
+const EXCERPT_FINDINGS = EXCERPT_REPORT.findings.slice(0, 3);
+const EXCERPT_PROMPT = EXCERPT_REPORT.remediation_prompts[0];
+const EXCERPT_PROMPT_LINES = EXCERPT_PROMPT
+  ? EXCERPT_PROMPT.prompt_text
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .slice(0, 4)
+  : [];
+
+function SectionHeading({ eyebrow, title, children }: { eyebrow: string; title: string; children?: React.ReactNode }) {
   return (
-    <div className="space-y-10 pb-12">
-      {/* Hero Header with Dual-Engine Gauge & Visual Hierarchy */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#121422] to-[#0a0b12] p-6 sm:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Left Column: Headlines & CTA */}
-          <div className="lg:col-span-8 space-y-4">
-            <div className="inline-flex items-center space-x-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-400">
-              <ShieldCheck className="h-4 w-4" />
-              <span>TrustCore Dual-Engine Standard</span>
-            </div>
+    <div className="max-w-2xl">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-blue-400">{eyebrow}</p>
+      <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{title}</h2>
+      {children && <p className="mt-3 text-sm leading-relaxed text-zinc-400 sm:text-base">{children}</p>}
+    </div>
+  );
+}
 
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
-              Enterprise AI Security & Readiness Monorepo
+export default function LandingPage() {
+  return (
+    <>
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-zinc-800/80">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-grid-mesh [mask-image:radial-gradient(ellipse_at_top,black_15%,transparent_70%)]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-56 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-blue-600/[0.13] blur-3xl"
+        />
+
+        <div className="relative mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-12 lg:gap-12 lg:py-24">
+          <div className="lg:col-span-7">
+            <p className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/70 px-3 py-1 font-mono text-[11px] text-zinc-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Deterministic checks for AI-built software
+            </p>
+
+            <h1 className="mt-5 text-[2rem] font-extrabold leading-[1.12] tracking-tight text-white sm:text-5xl sm:leading-[1.08] lg:text-[3.2rem]">
+              {HEADLINE}
             </h1>
 
-            <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-2xl">
-              One deterministic rule engine, one unified frontend shell, and one Stripe billing layer powering four essential AI readiness tools.
-              Every finding is computed deterministically in code—LLMs exclusively translate verified proof into plain-English remediation prompts.
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-zinc-400">
+              TrustCore checks what your AI tools generated and what your agents are allowed to do. Every finding
+              cites its file, line and rule, and comes with a fix prompt you can paste straight back into your AI
+              editor.
             </p>
 
-            {/* Dynamic A/B CTA Button */}
-            <div className="pt-2 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
-                href={heroCta.href}
-                onClick={() => trackCtaClick(ctaVariant)}
-                className="flex items-center space-x-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 transition active:scale-[0.98]"
+                href="/sample"
+                className="flex items-center justify-center space-x-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-500"
               >
-                <span>{heroCta.label}</span>
+                <span>Try Live Sample Audit</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
-
               <Link
-                href="/reports/rpt_lg_demo_7721"
-                className="flex items-center space-x-2 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-xs sm:text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-750 transition"
+                href="/launchgate"
+                className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/70 px-6 py-3 text-sm font-semibold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
               >
-                <FileCode className="h-4 w-4 text-zinc-400" />
-                <span>View Sample Audit Report</span>
+                Scan my repo
+              </Link>
+            </div>
+
+            <p className="mt-4 text-xs leading-relaxed text-zinc-500">
+              The sample needs no login. Your first preview scan is free: overall score plus the top 2 findings.
+            </p>
+          </div>
+
+          {/* Report excerpt, built from the bundled sample report and labelled as such */}
+          <figure className="lg:col-span-5">
+            <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-[#0c0d15] shadow-2xl shadow-black/50">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-4 py-2.5">
+                <span className="font-mono text-[11px] text-zinc-400">launchgate · sample audit</span>
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
+                  Demo app — not your code
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+                <div>
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Readiness score
+                  </p>
+                  <p className="mt-0.5 font-mono text-2xl font-extrabold text-red-400">
+                    {EXCERPT_REPORT.summary.risk_score}
+                    <span className="text-sm text-zinc-500">/100</span>
+                  </p>
+                </div>
+                <span className="rounded border border-red-500/30 bg-red-500/15 px-2 py-0.5 font-mono text-xs font-extrabold text-red-400">
+                  {EXCERPT_REPORT.summary.readiness_status}
+                </span>
+              </div>
+
+              <ul className="divide-y divide-zinc-800/70">
+                {EXCERPT_FINDINGS.map((finding) => (
+                  <li key={finding.id} className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold ${SEVERITY_CHIP[finding.severity]}`}
+                      >
+                        {finding.severity}
+                      </span>
+                      <span className="font-mono text-[10px] text-zinc-500">{finding.rule_id}</span>
+                    </div>
+                    <p className="mt-1.5 text-xs font-semibold leading-snug text-zinc-100">{finding.title}</p>
+                    <p className="mt-1 break-all font-mono text-[11px] text-blue-300">
+                      {finding.citation.file_path}
+                      {finding.citation.line_start ? `:${finding.citation.line_start}` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+
+              {EXCERPT_PROMPT_LINES.length > 0 && (
+                <div className="border-t border-zinc-800 px-4 py-3">
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-purple-300">
+                    Fix prompt · paste into your AI editor
+                  </p>
+                  <pre className="mt-2 whitespace-pre-wrap break-words rounded-lg border border-zinc-800 bg-[#090a0f] p-3 font-mono text-[11px] leading-relaxed text-zinc-300">
+                    {EXCERPT_PROMPT_LINES.join('\n')}
+                  </pre>
+                </div>
+              )}
+            </div>
+            <figcaption className="mt-3 text-[11px] text-zinc-500">
+              Excerpt from the sample report for a bundled demo app.{' '}
+              <Link href="/sample" className="font-semibold text-blue-400 hover:underline">
+                Open the full sample
+              </Link>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      {/* Products */}
+      <section id="products" className="scroll-mt-16 border-b border-zinc-800/80">
+        <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <SectionHeading eyebrow="Products" title="Four tools, one way of working">
+            Each tool takes your files, runs deterministic rules over them and returns a report you can check line
+            by line.
+          </SectionHeading>
+
+          <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {PRODUCTS.map((product, index) => {
+              const Icon = product.icon;
+              return (
+                <Link
+                  key={product.href}
+                  href={product.href}
+                  className="group flex flex-col justify-between rounded-2xl border border-zinc-800 bg-[#10111a] p-6 transition hover:border-zinc-700 hover:bg-[#131524]"
+                >
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${product.iconClass}`}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <h3 className="text-base font-bold text-white">{product.name}</h3>
+                          <p className="font-mono text-[11px] text-zinc-500">{product.kicker}</p>
+                        </div>
+                      </div>
+                      <span aria-hidden className="font-mono text-xs text-zinc-700">
+                        0{index + 1}
+                      </span>
+                    </div>
+
+                    <p className="mt-4 text-sm leading-relaxed text-zinc-400">{product.description}</p>
+
+                    <ul className="mt-4 space-y-2 text-xs text-zinc-300">
+                      {product.checks.map((check) => (
+                        <li key={check} className="flex items-start">
+                          <Check className="mr-2 mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                          <span>{check}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <span
+                    className={`mt-6 inline-flex items-center space-x-1.5 text-xs font-semibold transition ${product.linkClass}`}
+                  >
+                    <span>{product.cta}</span>
+                    <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how-it-works" className="scroll-mt-16 border-b border-zinc-800/80 bg-[#0b0c13]">
+        <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <SectionHeading eyebrow="How it works" title="From upload to fix in three steps" />
+
+          <ol className="mt-10 grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-6">
+            {STEPS.map((step, index) => {
+              const Icon = step.icon;
+              return (
+                <li key={step.title} className="border-t border-zinc-800 pt-5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-blue-400">0{index + 1}</span>
+                    <Icon className="h-4 w-4 text-zinc-600" />
+                  </div>
+                  <h3 className="mt-3 text-base font-bold text-white">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{step.body}</p>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="scroll-mt-16 border-b border-zinc-800/80">
+        <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <SectionHeading eyebrow="Pricing" title="Start free. Pay when you want the full report." />
+
+          <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.04] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="max-w-2xl">
+              <p className="text-sm font-bold text-emerald-200">Your first preview scan is free.</p>
+              <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+                It includes the overall score and the top 2 findings. The full report, with every finding, exact
+                citations, fix prompts and exports, comes with a Launch Audit or Pro Builder.
+              </p>
+            </div>
+            <Link
+              href="/launchgate"
+              className="flex shrink-0 items-center justify-center space-x-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+            >
+              <span>Run a free preview scan</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="mt-6">
+            <PricingCards />
+          </div>
+
+          <p className="mt-5 text-xs leading-relaxed text-zinc-500">
+            Payments are processed by Stripe; card details never reach TrustCore. Buying a plan requires signing
+            in. Rate limits apply to all plans.
+          </p>
+        </div>
+      </section>
+
+      {/* Trust strip */}
+      <section className="border-b border-zinc-800/80 bg-[#0b0c13]">
+        <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <SectionHeading eyebrow="Your code" title="How TrustCore handles your code" />
+            <Link
+              href="/security"
+              className="inline-flex items-center space-x-1.5 text-sm font-semibold text-blue-400 transition hover:text-blue-300"
+            >
+              <span>Read the full security page</span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          <div className="mt-10 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800 sm:grid-cols-2 lg:grid-cols-4">
+            {TRUST_POINTS.map((point) => {
+              const Icon = point.icon;
+              return (
+                <div key={point.title} className="bg-[#10111a] p-5">
+                  <Icon className="h-5 w-5 text-emerald-400" />
+                  <h3 className="mt-3 text-sm font-bold text-white">{point.title}</h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">{point.body}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Closing call to action */}
+      <section>
+        <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+          <div className="rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#121422] to-[#0a0b12] p-8 text-center sm:p-12">
+            <h2 className="mx-auto max-w-2xl text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+              Read a full report before you share any code
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-zinc-400 sm:text-base">
+              The sample audit runs on a bundled demo app. No login and no upload.
+            </p>
+            <div className="mt-7 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+              <Link
+                href="/sample"
+                className="flex items-center justify-center space-x-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-500"
+              >
+                <span>Try Live Sample Audit</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/launchgate"
+                className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/70 px-6 py-3 text-sm font-semibold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
+              >
+                Scan my repo
               </Link>
             </div>
           </div>
-
-          {/* Right Column: Interactive Posture Gauge */}
-          <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/40">
-            {/* Fixed sample score: in live mode it is labelled so it cannot pass for the visitor's posture */}
-            {isMockEnabled() ? (
-              <SecurityGauge score={42} label="Monorepo Aggregate AI Readiness Posture" size="md" />
-            ) : (
-              <IllustrativeExample>
-                <SecurityGauge score={42} label="Sample AI Readiness Posture" size="md" />
-              </IllustrativeExample>
-            )}
-          </div>
         </div>
-
-        {/* Dual-Engine Architecture Blueprint */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-zinc-800/80">
-          <div className="flex items-start space-x-3.5 rounded-xl border border-zinc-800/80 bg-[#090a0f] p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">
-                Engine 1: Deterministic Rule Engine
-              </span>
-              <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
-                100% computed in Python. Regex patterns, AST parsing, permissions matrix computation, and exact source citations (<code className="text-zinc-300 font-mono">file</code>, <code className="text-zinc-300 font-mono">line</code>, <code className="text-zinc-300 font-mono">rule_id</code>). Zero fabricated compliance findings.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start space-x-3.5 rounded-xl border border-zinc-800/80 bg-[#090a0f] p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <Zap className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">
-                Engine 2: LLM Explanation Layer
-              </span>
-              <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
-                Translates verified deterministic evidence into plain-English executive summaries and one-click copy-paste remediation prompts formatted for Cursor, Lovable, Claude, and Terminal.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Aggregate Readiness Status Bar (fixed sample figures; labelled in live mode) */}
-      <div className="space-y-2">
-      {!isMockEnabled() && (
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-mono font-semibold text-amber-300">
-          Illustrative example — not your data
-        </div>
-      )}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
-          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-            Suite Modules
-          </span>
-          <p className="mt-1 text-2xl font-extrabold text-zinc-100 font-mono">4 Active</p>
-          <span className="text-[10px] text-emerald-400 font-medium">Shared Python Core</span>
-        </div>
-
-        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
-          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-            Pre-Launch Gate
-          </span>
-          <p className="mt-1 text-2xl font-extrabold text-red-400 font-mono">Blocked</p>
-          <span className="text-[10px] text-zinc-400">2 Critical Leaks Detected</span>
-        </div>
-
-        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
-          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-            MCP Blast Radius
-          </span>
-          <p className="mt-1 text-2xl font-extrabold text-purple-400 font-mono">-78%</p>
-          <span className="text-[10px] text-zinc-400">Scoped Diff Ready</span>
-        </div>
-
-        <div className="rounded-xl border border-zinc-800 bg-[#10111a] p-4">
-          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-            Questionnaire Gaps
-          </span>
-          <p className="mt-1 text-2xl font-extrabold text-amber-400 font-mono">2 Gaps</p>
-          <span className="text-[10px] text-zinc-400">Zero Hallucinations</span>
-        </div>
-      </div>
-      </div>
-
-      {/* Product Modules Grid */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">
-              Modular AI Readiness Applications
-            </h2>
-            <p className="text-xs text-zinc-400">
-              Select an auditor to inspect code, agent permissions, SOC 2 documents, or test harnesses.
-            </p>
-          </div>
-          <span className="text-[11px] font-mono text-zinc-500 hidden sm:inline">
-            FastAPI Endpoints Live
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {tools.map((t) => {
-            const Icon = t.icon;
-            return (
-              <div
-                key={t.id}
-                className="group relative flex flex-col justify-between rounded-xl border border-zinc-800 bg-[#11121c] p-5 transition-all hover:border-zinc-700 hover:bg-[#131524] shadow-sm"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-blue-400 group-hover:scale-105 transition">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition">
-                          {t.title}
-                        </h3>
-                        <span className="text-[11px] text-zinc-400 font-mono">{t.tagline}</span>
-                      </div>
-                    </div>
-
-                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono font-semibold text-zinc-400 border border-zinc-700/60">
-                      {t.badge}
-                    </span>
-                  </div>
-
-                  <p className="mt-3 text-xs text-zinc-400 leading-relaxed">
-                    {t.description}
-                  </p>
-                </div>
-
-                <div className="mt-5 flex items-center justify-between pt-3 border-t border-zinc-800/80">
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        t.status === 'BLOCKED' ? 'bg-red-500' : 'bg-amber-500'
-                      }`}
-                    />
-                    <span className="text-[11px] font-mono text-zinc-300">
-                      {isMockEnabled() ? t.sampleRisk : `Sample result: ${t.sampleRisk}`}
-                    </span>
-                  </div>
-
-                  <Link
-                    href={t.href}
-                    className="flex items-center space-x-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition"
-                  >
-                    <span>Launch Auditor</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Embedded Free Tools & Lead Magnets Shelf */}
-      <FreeToolsSection />
-
-      {/* Demo Report Quick Jump */}
-      <div className="rounded-xl border border-zinc-800 bg-[#0e0f17] p-5 sm:p-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <FileCode className="h-4 w-4 text-blue-400" />
-              <h3 className="text-sm font-bold text-zinc-200">
-                Interactive Source-Cited Report Viewer & JSON/Print Export
-              </h3>
-            </div>
-            <p className="text-xs text-zinc-400 max-w-2xl">
-              Inspect an end-to-end report generated by the Dual-Engine pipeline. Features exact line-level source code snippets, Engine 2 executive summaries, and multi-format exports.
-            </p>
-          </div>
-
-          <Link
-            href="/reports/rpt_lg_demo_7721"
-            className="flex shrink-0 items-center space-x-1.5 rounded-lg bg-zinc-800 border border-zinc-700/80 px-4 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition"
-          >
-            <span>Open Sample Report</span>
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-    </div>
+      </section>
+    </>
   );
 }

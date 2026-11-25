@@ -79,7 +79,7 @@ export default function LoginPage() {
               <code className="font-mono text-zinc-300">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, then rebuild.
               Until then the app runs without sign-in against an API with auth disabled.
             </p>
-            <Link href="/" className="inline-block text-blue-400 hover:underline">
+            <Link href="/dashboard" className="inline-block text-blue-400 hover:underline">
               Return to Overview Hub
             </Link>
           </div>
@@ -96,7 +96,7 @@ export default function LoginPage() {
             </div>
             <div className="flex items-center justify-center gap-2">
               <Link
-                href="/"
+                href="/dashboard"
                 className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow hover:bg-blue-500 transition"
               >
                 Go to Overview Hub

@@ -36,6 +36,7 @@ import { runScan, getSampleData, ingestGithub, isMockEnabled, isDemoReport, toUi
 import { MOCK_REPORTS } from '@/lib/mockData';
 import { useABExperiment } from '@/lib/abTesting';
 import { useBilling } from '@/lib/billing';
+import { track } from '@/lib/analytics';
 
 export default function LaunchGatePage() {
   const { remediationFormat, setRemediationFormat } = useABExperiment();
@@ -122,6 +123,7 @@ CREATE POLICY "Public read and write access" ON public.user_profiles
       } else {
         const sample = await getSampleData('launchgate');
         scanFiles = sample.files || [];
+        track('sample_loaded', { product: 'launchgate', source: 'product_page' });
       }
 
       const res = await runScan({

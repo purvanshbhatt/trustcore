@@ -7,8 +7,9 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 # Fail closed: production requires auth (SUPABASE_URL or SUPABASE_JWT_SECRET) and DATABASE_URL.
 ENV ENVIRONMENT=production
-# Cloud Run puts one proxy in front of the container; the client IP is the last
-# X-Forwarded-For entry. Change this if the deployment has a different proxy chain.
+# Proxies in front of the container whose X-Forwarded-For entry is trusted. 1 assumes a
+# plain Cloud Run URL; an external Application Load Balancer appends two entries, so use 2
+# there. Confirm after deploying: GET /health reports forwarded_for_entries.
 ENV TRUSTED_PROXY_HOPS=1
 
 WORKDIR /app

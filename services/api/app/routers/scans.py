@@ -1,8 +1,9 @@
+import threading
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, Request, Response, status
 from app.core.auth import AuthenticatedUser, get_caller, get_current_user
 from app.core.billing import BillingService, get_billing_service
-from app.core.entitlements import PaymentRequired
+from app.core.entitlements import PaymentRequired, ScanAccess
 from app.core.ratelimit import SCAN_SCOPE, limiter, scan_limit
 from app.core.schemas import ProductType, ScanRequest, Report, ScanInputFile
 from app.core.engine import get_engine, TrustCoreEngine
@@ -225,3 +226,45 @@ def get_sample_data(product: ProductType):
     if not sample:
         raise HTTPException(status_code=404, detail="Sample not found for this product.")
     return sample
+
+
+_sample_reports: Dict[ProductType, Report] = {}
+_sample_reports_lock = threading.Lock()
+
+
+def clear_sample_report_cache() -> None:
+    """Drop cached sample reports (used by tests)."""
+    with _sample_reports_lock:
+        _sample_reports.clear()
+
+
+@router.get("/samples/{product}/report", response_model=Report)
+def get_sample_report(
+    product: ProductType,
+    engine: TrustCoreEngine = Depends(get_engine)
+):
+    """
+    Full audit report for the bundled sample inputs, produced by the real engine.
+
+    Public and free: it scans TrustCore's own demo files, not user data, so it needs no
+    sign-in, spends no credit or free preview, and is never stored. The report is computed
+    once per process and served from memory; the live LLM is never used for it.
+    """
+    report = _sample_reports.get(product)
+    if report is None:
+        with _sample_reports_lock:
+            report = _sample_reports.get(product)
+            if report is None:
+                sample = SAMPLES[product]
+                sample_request = ScanRequest(
+                    product=product,
+                    project_name=sample["project_name"],
+                    files=[ScanInputFile(**item) for item in sample["files"]],
+                    ephemeral=True,
+                )
+                generated = engine.run_scan(sample_request, user_id="sample", access=ScanAccess.FULL, persist=False)
+                report = generated.model_copy(
+                    update={"id": f"sample_{product.value}", "metadata": {**generated.metadata, "is_sample": True}}
+                )
+                _sample_reports[product] = report
+    return report

@@ -144,7 +144,7 @@ def _return_url(requested: Optional[str], default_query: str) -> str:
     """Validate a post-checkout redirect: it must stay on an allowed web origin."""
     origins = resolve_cors_origins()
     if not requested:
-        return f"{origins[0]}/?{default_query}"
+        return f"{origins[0]}/dashboard?{default_query}"
     parts = urlsplit(requested)
     if f"{parts.scheme}://{parts.netloc}" not in origins:
         raise BillingError(400, "success_url and cancel_url must point at the TrustCore web app.")

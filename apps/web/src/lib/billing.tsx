@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { track, type PaywallSource } from './analytics';
 import { getBillingStatus, toUiError, type UiError } from './api';
 import { useAuth } from './auth';
 import type { BillingStatusResponse } from './types';
@@ -17,7 +18,8 @@ interface BillingContextValue {
   /** True when the page was opened from a completed Stripe Checkout (`?billing=success`). */
   readonly returnedFromCheckout: boolean;
   readonly isPaywallOpen: boolean;
-  readonly openPaywall: () => void;
+  /** Open the paywall; `source` (where it was opened from) is recorded with the analytics event. */
+  readonly openPaywall: (source: PaywallSource) => void;
   readonly closePaywall: () => void;
 }
 
@@ -34,9 +36,16 @@ const OUTSIDE_PROVIDER: BillingContextValue = {
   closePaywall: () => undefined,
 };
 
-export function BillingProvider({ children }: { children: React.ReactNode }) {
+interface BillingProviderProps {
+  readonly children: React.ReactNode;
+  /** Load the plan from the API. False on marketing pages, which never show it. */
+  readonly autoLoad?: boolean;
+}
+
+export function BillingProvider({ children, autoLoad = true }: BillingProviderProps) {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
+  const checkoutReturnTracked = useRef(false);
 
   const [status, setStatus] = useState<BillingStatusResponse | null>(null);
   const [statusError, setStatusError] = useState<UiError | null>(null);
@@ -60,22 +69,30 @@ export function BillingProvider({ children }: { children: React.ReactNode }) {
 
   // Load once the session is known, and again whenever the signed-in user changes.
   useEffect(() => {
-    if (authLoading) {
+    if (authLoading || !autoLoad) {
       return;
     }
     void refresh();
-  }, [authLoading, userId, refresh]);
+  }, [authLoading, userId, refresh, autoLoad]);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('billing') !== 'success') {
       return;
     }
     setReturnedFromCheckout(true);
+    // Once per page load, even if this effect re-runs.
+    if (!checkoutReturnTracked.current) {
+      checkoutReturnTracked.current = true;
+      track('checkout_completed');
+    }
     const timers = CHECKOUT_RETURN_RECHECK_MS.map((delay) => window.setTimeout(() => void refresh(), delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [refresh]);
 
-  const openPaywall = useCallback(() => setIsPaywallOpen(true), []);
+  const openPaywall = useCallback((source: PaywallSource) => {
+    setIsPaywallOpen(true);
+    track('paywall_opened', { source });
+  }, []);
   const closePaywall = useCallback(() => setIsPaywallOpen(false), []);
 
   const value = useMemo<BillingContextValue>(

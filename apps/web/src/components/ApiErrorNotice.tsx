@@ -91,7 +91,7 @@ export function ApiErrorNotice({ error, className = '', onRetry }: ApiErrorNotic
         </div>
         <button
           type="button"
-          onClick={openPaywall}
+          onClick={() => openPaywall('upgrade_required')}
           className="shrink-0 rounded-lg bg-blue-600 px-3 py-1 font-semibold text-white shadow transition hover:bg-blue-500"
         >
           Unlock full scans

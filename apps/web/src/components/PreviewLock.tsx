@@ -52,7 +52,7 @@ export function PreviewLockedPanel({ report, showGauge = true }: PreviewLockedPa
         <div className="flex justify-start md:col-span-3 md:justify-end">
           <button
             type="button"
-            onClick={openPaywall}
+            onClick={() => openPaywall('preview_panel')}
             className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow transition hover:bg-blue-500 active:scale-[0.98]"
           >
             <Sparkles className="h-3.5 w-3.5" />
@@ -94,7 +94,7 @@ export function LockedPlaceholder({
       </div>
       <button
         type="button"
-        onClick={openPaywall}
+        onClick={() => openPaywall('locked_section')}
         className="shrink-0 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 font-semibold text-blue-200 transition hover:bg-blue-500/20"
       >
         Unlock

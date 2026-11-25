@@ -11,6 +11,7 @@ import {
 } from './types';
 import { MOCK_REPORTS } from './mockData';
 import { getAccessToken } from './supabase';
+import { track } from './analytics';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
@@ -206,6 +207,8 @@ export async function runScan(request: ScanRequest): Promise<Report> {
     return buildMockScanReport(request);
   }
 
+  // Enumerated values only: never the project name, file names or contents.
+  track('scan_started', { product: request.product, zero_retention: request.ephemeral === true });
   const res = await apiFetch(`/api/v1/run/${request.product}`, {
     method: 'POST',
     headers: await authHeaders({ 'Content-Type': 'application/json' }),
@@ -336,6 +339,62 @@ export async function getSampleData(product: ProductType): Promise<SampleData> {
   return (await res.json()) as SampleData;
 }
 
+/** How long the live sample report may take before the caller falls back to the built-in one. */
+const SAMPLE_REPORT_TIMEOUT_MS = 2500;
+
+/** The built-in sample report for a product, flagged as sample data. */
+export function getBuiltInSampleReport(product: ProductType): Report {
+  const sample = MOCK_REPORTS[product];
+  const reason: MockReason = 'sample';
+  return { ...sample, metadata: { ...sample.metadata, is_mock: true, mock_reason: reason, is_sample: true } };
+}
+
+function isReportPayload(value: unknown, product: ProductType): value is Report {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as { product?: unknown; summary?: unknown; findings?: unknown };
+  return (
+    candidate.product === product &&
+    typeof candidate.summary === 'object' &&
+    candidate.summary !== null &&
+    Array.isArray(candidate.findings)
+  );
+}
+
+/**
+ * Public sample audit from GET /api/v1/samples/{product}/report (no auth): a full
+ * report the real engine produced from a bundled demo app, flagged
+ * `metadata.is_sample`. Mock mode returns the built-in sample. In live mode a
+ * failure, a timeout or a malformed payload throws; a caller that must always
+ * render (the /sample page) then shows `getBuiltInSampleReport`, which is
+ * labelled sample data either way.
+ */
+export async function getSampleReport(product: ProductType): Promise<Report> {
+  if (USE_MOCK) {
+    return getBuiltInSampleReport(product);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SAMPLE_REPORT_TIMEOUT_MS);
+  try {
+    const res = await apiFetch(`/api/v1/samples/${product}/report`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw await errorFromResponse(res);
+    }
+    const body: unknown = await res.json();
+    if (!isReportPayload(body, product)) {
+      throw new ApiError(res.status, 'The sample report response was not a valid report.');
+    }
+    return { ...body, metadata: { ...body.metadata, is_sample: true } };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Start a Stripe Checkout session. `success_url` / `cancel_url` stay on this app's
  * origin. In live mode there is no simulated success: 401 (sign-in required), 400
@@ -344,7 +403,7 @@ export async function getSampleData(product: ProductType): Promise<SampleData> {
 export async function createCheckout(tier: BillingCheckoutRequest['tier']): Promise<BillingCheckoutResponse> {
   if (USE_MOCK) {
     return {
-      checkout_url: '/?billing=mock_success',
+      checkout_url: '/dashboard?billing=mock_success',
       session_id: `cs_mock_${Date.now()}`,
       is_mock: true,
       message: `Mock checkout initiated for ${tier}. Plan activated.`,
@@ -354,8 +413,8 @@ export async function createCheckout(tier: BillingCheckoutRequest['tier']): Prom
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
   const body: BillingCheckoutRequest = {
     tier,
-    success_url: `${origin}/?billing=success`,
-    cancel_url: `${origin}/?billing=cancel`,
+    success_url: `${origin}/dashboard?billing=success`,
+    cancel_url: `${origin}/dashboard?billing=cancelled`,
   };
   const res = await apiFetch('/api/v1/billing/checkout', {
     method: 'POST',

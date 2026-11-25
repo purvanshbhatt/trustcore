@@ -38,6 +38,7 @@ import { ScanInputFile, Report, SourceCitation, MCPToolPermission, isPreviewRepo
 import { runScan, getSampleData, isMockEnabled, isDemoReport, toUiError, type UiError } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
 import { useBilling } from '@/lib/billing';
+import { track } from '@/lib/analytics';
 
 export default function AgentScopePage() {
   // The simulator is a fixed illustration, so live mode opens on the scan-driven diff instead.
@@ -116,6 +117,7 @@ export default function AgentScopePage() {
     setScanError(null);
     try {
       const sample = await getSampleData('agentscope');
+      track('sample_loaded', { product: 'agentscope', source: 'product_page' });
       setProjectName(sample.project_name || 'Claude Desktop & Agent Workstation Config');
       if (sample.files && sample.files[0]) {
         setMcpJsonContent(sample.files[0].content);

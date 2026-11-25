@@ -60,7 +60,8 @@ def client_ip(request: Request) -> str:
     With no trusted proxy the TCP peer is used and ``X-Forwarded-For`` is ignored.
     With N trusted proxies the Nth address from the *right* of ``X-Forwarded-For``
     is used: each trusted proxy appends the address it saw, so entries further
-    left are client-supplied and never trusted. (Cloud Run: 1.)
+    left are client-supplied and never trusted. ``GET /health`` reports how many
+    entries arrive, which is the hop count to configure.
     """
     raw_peer = request.client.host if request.client and request.client.host else "unknown"
     peer = _normalise_ip(raw_peer) or raw_peer
@@ -106,7 +107,10 @@ def validate_rate_limit_config() -> None:
     """
     raw_hops = os.getenv("TRUSTED_PROXY_HOPS", "0").strip()
     if not raw_hops.isdigit():
-        raise RuntimeError("TRUSTED_PROXY_HOPS must be a non-negative integer (0 = no proxy, 1 = Cloud Run).")
+        raise RuntimeError(
+            "TRUSTED_PROXY_HOPS must be a non-negative integer (0 = no proxy; otherwise the "
+            "forwarded_for_entries value that GET /health reports for a normal client)."
+        )
     logger.info("Client IPs are resolved with TRUSTED_PROXY_HOPS=%s", raw_hops)
     for name, value in (("RATE_LIMIT_SCAN", scan_limit()), ("RATE_LIMIT_INGEST", ingest_limit())):
         try:

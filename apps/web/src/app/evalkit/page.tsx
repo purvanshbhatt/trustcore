@@ -35,6 +35,7 @@ import { ScanInputFile, Report, SourceCitation, EvalCaseResult, ModelRegressionD
 import { runScan, getSampleData, isMockEnabled, toUiError, type UiError } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
 import { useBilling } from '@/lib/billing';
+import { track } from '@/lib/analytics';
 
 export default function EvalKitPage() {
   const [activeTab, setActiveTab] = useState<'tests' | 'regression'>('tests');
@@ -95,6 +96,7 @@ You have access to tool 'execute_database_query' for querying customer profiles.
     setScanError(null);
     try {
       const sample = await getSampleData('evalkit');
+      track('sample_loaded', { product: 'evalkit', source: 'product_page' });
       setProjectName(sample.project_name || 'Customer Support Bot Guardrails');
       if (sample.files && sample.files[0]) {
         setPromptContent(sample.files[0].content);

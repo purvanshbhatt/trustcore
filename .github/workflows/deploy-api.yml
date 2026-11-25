@@ -1,0 +1,36 @@
+name: Deploy API (Cloud Run)
+
+# Manual only: run from the Actions tab. Requires these repository variables
+# (Settings > Secrets and variables > Actions > Variables):
+#   GCP_PROJECT_ID, GCP_REGION, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT,
+#   CLOUD_RUN_ENV_YAML (the filled-in contents of deploy/cloud-run.env.example.yaml),
+#   WITH_GEMINI (optional, "1" to mount the Gemini key).
+# Secret values stay in Google Secret Manager; none are stored in GitHub.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Write Cloud Run env file
+        run: printf '%s\n' "$CLOUD_RUN_ENV_YAML" > deploy/cloud-run.env.yaml
+        env:
+          CLOUD_RUN_ENV_YAML: ${{ vars.CLOUD_RUN_ENV_YAML }}
+      - name: Deploy
+        run: bash deploy/cloud-run-deploy.sh
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION }}
+          WITH_GEMINI: ${{ vars.WITH_GEMINI }}

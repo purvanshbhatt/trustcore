@@ -31,10 +31,10 @@ export default function AuthCallbackPage() {
     setUrlError(readErrorFromUrl());
   }, []);
 
-  // The Supabase client exchanges the `?code=` param on init; once a session exists, go home.
+  // The Supabase client exchanges the `?code=` param on init; once a session exists, open the dashboard.
   useEffect(() => {
     if (user) {
-      router.replace('/');
+      router.replace('/dashboard');
     }
   }, [user, router]);
 

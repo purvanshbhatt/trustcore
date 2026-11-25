@@ -23,6 +23,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { PaywallModal } from '@/components/PaywallModal';
+import { MarketingShell } from '@/components/MarketingShell';
 import { checkApiHealth, isMockEnabled } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { BillingProvider, useBilling } from '@/lib/billing';
@@ -32,6 +33,9 @@ import { ABExperimentBar } from '@/components/ABExperimentBar';
 interface AppShellProps {
   children: React.ReactNode;
 }
+
+/** Public marketing and legal routes: marketing header and footer instead of the app sidebar shell. */
+const MARKETING_PATHS: readonly string[] = ['/', '/sample', '/security', '/privacy', '/terms'];
 
 function InnerAppShell({ children }: AppShellProps) {
   const pathname = usePathname();
@@ -73,7 +77,7 @@ function InnerAppShell({ children }: AppShellProps) {
   const navItems = [
     {
       name: 'Overview Hub',
-      href: '/',
+      href: '/dashboard',
       icon: Layers,
       description: 'Unified 4-tool status & stats',
     },
@@ -126,7 +130,7 @@ function InnerAppShell({ children }: AppShellProps) {
       <aside className="hidden lg:flex w-64 flex-col justify-between border-r border-zinc-800/80 bg-[#0c0d15] p-4 shrink-0 select-none">
         <div className="space-y-6">
           {/* Brand */}
-          <Link href="/" className="flex items-center space-x-2.5 px-2 group">
+          <Link href="/dashboard" className="flex items-center space-x-2.5 px-2 group">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition">
               <ShieldCheck className="h-5 w-5" />
             </div>
@@ -254,7 +258,7 @@ function InnerAppShell({ children }: AppShellProps) {
               </div>
             )}
             <button
-              onClick={openPaywall}
+              onClick={() => openPaywall('sidebar')}
               className="mt-1 flex w-full items-center justify-center space-x-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-blue-500 active:scale-[0.98]"
             >
               <CreditCard className="h-3.5 w-3.5" />
@@ -295,7 +299,7 @@ function InnerAppShell({ children }: AppShellProps) {
 
           <div className="flex items-center space-x-2.5">
             <Link
-              href="/"
+              href="/dashboard"
               className="hidden md:flex items-center space-x-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition"
             >
               <Zap className="h-3.5 w-3.5 text-amber-400" />
@@ -303,7 +307,7 @@ function InnerAppShell({ children }: AppShellProps) {
             </Link>
 
             <button
-              onClick={openPaywall}
+              onClick={() => openPaywall('header')}
               className="flex items-center space-x-1.5 rounded-lg border border-blue-500/30 bg-blue-600/10 px-3 py-1 text-xs font-semibold text-blue-300 hover:bg-blue-600/20 transition"
             >
               <CreditCard className="h-3.5 w-3.5 text-blue-400" />
@@ -398,11 +402,19 @@ function InnerAppShell({ children }: AppShellProps) {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname();
+  const isMarketing = MARKETING_PATHS.includes(pathname ?? '');
+
   return (
     <AuthProvider>
-      <BillingProvider>
+      {/* Marketing pages never show the plan, so they do not call the billing API. */}
+      <BillingProvider autoLoad={!isMarketing}>
         <ABExperimentProvider>
-          <InnerAppShell>{children}</InnerAppShell>
+          {isMarketing ? (
+            <MarketingShell>{children}</MarketingShell>
+          ) : (
+            <InnerAppShell>{children}</InnerAppShell>
+          )}
         </ABExperimentProvider>
       </BillingProvider>
     </AuthProvider>

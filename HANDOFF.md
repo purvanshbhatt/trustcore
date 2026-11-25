@@ -142,7 +142,7 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --env-file .
 ```bash
 cd services/api
 .venv/bin/pytest tests/
-# Result: 285 passed (in-memory SQLite, no network: Stripe and Gemini calls are replaced by fakes)
+# Result: 296 passed (in-memory SQLite, no network: Stripe and Gemini calls are replaced by fakes)
 ```
 
 ---
@@ -181,6 +181,7 @@ cd services/api
 - `POST /api/v1/ingest/upload` (sign-in optional, rate limited): `multipart/form-data` with repeated `files` and optional `product`. Returns `IngestResponse`. `413` over 15 MB, `415` unsupported/binary, `400` corrupt archive or path traversal.
 - `POST /api/v1/ingest/github` (sign-in optional, rate limited): JSON `{ "repo_url": "https://github.com/owner/repo", "ref": "main" }`. Returns `IngestResponse`. `404` missing/private, `413` archive over 15 MB.
 - `GET /api/v1/samples/{product}`: Return preloaded realistic sample files for instant UI testing.
+- `GET /api/v1/samples/{product}/report`: Full report produced by the real engine from those sample files (`metadata.is_sample = true`). Public, cached in memory, never stored, spends nothing. Backs the landing page's "Try Live Sample Audit".
 
 🔒 = requires `Authorization: Bearer <Supabase access token>` whenever auth is required (see §6); `401` otherwise.
 - `POST /api/v1/billing/checkout`: Create a Stripe Checkout Session (`per_scan`, `pro_monthly`, `enterprise_monthly`) bound to the caller. Live billing requires sign-in (`401`); `400` for a redirect URL off the web origin; `503` if Stripe is unavailable.
@@ -392,7 +393,7 @@ These figures predate Phase 2B (entitlement check per scan, rate limiter) and we
 | `RATE_LIMIT_SCAN` / `RATE_LIMIT_INGEST` | `10/minute` | Per-IP limits for `/api/v1/run/*` and `/api/v1/ingest/*`. |
 | `RATE_LIMIT_ENABLED` | `true` | Turn the limiter off (tests). |
 | `RATE_LIMIT_STORAGE_URI` | in-memory | Shared counter store, e.g. `redis://…`. Needed for the limit to hold across several instances. |
-| `TRUSTED_PROXY_HOPS` | `0` (the Docker image sets `1` for Cloud Run) | Reverse proxies in front of the API. `0` uses the TCP peer; `N` uses the Nth address from the right of `X-Forwarded-For`. Too low and every visitor shares one limit and one free preview; too high and clients can forge their address. A non-integer value stops startup. |
+| `TRUSTED_PROXY_HOPS` | `0` (the Docker image sets `1`) | Reverse proxies in front of the API. `0` uses the TCP peer; `N` uses the Nth address from the right of `X-Forwarded-For`. Too low and every visitor shares one limit and one free preview; too high and clients can forge their address. A non-integer value stops startup. **Verify per deployment:** `GET /health` from a normal client returns `forwarded_for_entries`, which is the value to set. Google documents two appended entries behind an external Application Load Balancer; the count for a plain `run.app` URL was not confirmed here. |
 | `ANON_ID_SALT` | empty | Salt for the IP hash that identifies signed-out visitors. Set a random value in production. |
 
 The web app needs no new variables.
@@ -475,3 +476,102 @@ Engine 1 stays the only source of findings, severities, counts, and score: none 
 - **Subscription edge cases:** one subscription id is stored per account, so a second subscription replaces the first and cancelling it downgrades the account; and a `customer.subscription.deleted` delivered before its `checkout.session.completed` leaves the subscription active.
 - **Local development needs `ENVIRONMENT=development`.** The service fails closed: unset means production, and unsafe combinations (`MOCK_BILLING=true`, `AUTH_REQUIRED=false`, placeholder or test Stripe keys, `CORS_ORIGINS=*`, missing auth/database/CORS settings) stop startup with a message naming the variable. `npm run dev:api` loads the repo-root `.env`; the API does not read `.env` on its own, so a bare `uvicorn app.main:app` needs the variables exported or `--env-file`.
 - **Prompt injection is reduced, not eliminated:** a model answer that passes every check can still contain misleading prose. It cannot alter findings, severities, counts, or the score.
+
+---
+
+## 8. Phase 2C — Public Launch: Landing, Legal, Analytics, Deployment
+
+### 8.1 Routes
+
+| Route | Purpose |
+|---|---|
+| `/` | Public marketing landing page: value proposition, "Try Live Sample Audit", four-product grid, pricing. |
+| `/sample` | Sample audit, no login. Shows `GET /api/v1/samples/{product}/report`; falls back to the built-in sample, with a note, if the API is unreachable or has not answered within 2.5 s. Always labelled as sample data. |
+| `/security`, `/privacy`, `/terms` | Trust and legal pages. |
+| `/dashboard` | The workspace hub (previously `/`). Stripe Checkout and sign-in return here (`/dashboard?billing=success`). |
+| `/launchgate`, `/agentscope`, `/evidence`, `/evalkit`, `/reports/[id]`, `/login` | Unchanged. |
+
+Pricing shown on the site: **Launch Audit $29** (tier `per_scan`), **Pro Builder $49/mo** (`pro_monthly`), **Done-For-You AI Readiness Sprint from $1,500** (contact). The amounts charged are whatever the Stripe Prices behind `STRIPE_PRICE_ID_*` say: create the Prices to match.
+
+### 8.2 Analytics (Plausible, cookieless)
+
+Off unless `NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL` is set. Events (`src/lib/analytics.ts`), each with enumerated properties only (product, tier, source, zero-retention flag) and never file names, contents, repo URLs, report ids, or emails:
+
+| Event | Fired when |
+|---|---|
+| `sample_loaded` | A sample audit is shown on `/sample`, or a product page loads its sample. |
+| `scan_started` | A scan request is sent. |
+| `paywall_opened` | The paywall opens. |
+| `checkout_completed` | The app is opened with `?billing=success` after Stripe Checkout. |
+
+Add the four names as custom event goals in the Plausible site settings. `checkout_completed` reflects the browser returning from Checkout; Stripe remains the source of truth for payments.
+
+### 8.3 Deploy the API to Cloud Run
+
+Files: `deploy/cloud-run-deploy.sh`, `deploy/cloud-run.env.example.yaml`, `.github/workflows/deploy-api.yml` (manual trigger), `.github/workflows/ci.yml` (pytest + web build on push and pull request).
+
+1. Apply `services/api/migrations/001_reports.sql` and `002_entitlements.sql` to the database.
+2. Enable APIs and create the secrets (values via stdin):
+   ```bash
+   gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com --project "$PROJECT_ID"
+   printf '%s' "$DATABASE_URL" | gcloud secrets create trustcore-database-url --data-file=- --project "$PROJECT_ID"
+   printf '%s' "$STRIPE_SECRET_KEY" | gcloud secrets create trustcore-stripe-secret-key --data-file=- --project "$PROJECT_ID"
+   printf '%s' "$STRIPE_WEBHOOK_SECRET" | gcloud secrets create trustcore-stripe-webhook-secret --data-file=- --project "$PROJECT_ID"
+   openssl rand -hex 32 | gcloud secrets create trustcore-anon-id-salt --data-file=- --project "$PROJECT_ID"
+   ```
+   Grant the Cloud Run service account `roles/secretmanager.secretAccessor`.
+3. `cp deploy/cloud-run.env.example.yaml deploy/cloud-run.env.yaml` (git-ignored) and replace every `YOUR-` / `REPLACE` value.
+4. Deploy:
+   ```bash
+   PROJECT_ID=my-gcp-project REGION=us-central1 bash deploy/cloud-run-deploy.sh
+   ```
+   which runs exactly:
+   ```bash
+   gcloud run deploy trustcore-api \
+     --project "$PROJECT_ID" --region "$REGION" \
+     --source services/api --port 8000 --allow-unauthenticated \
+     --memory 1Gi --cpu 1 --concurrency 20 --timeout 120 \
+     --min-instances 0 --max-instances 4 \
+     --env-vars-file deploy/cloud-run.env.yaml \
+     --set-secrets "DATABASE_URL=trustcore-database-url:latest,STRIPE_SECRET_KEY=trustcore-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=trustcore-stripe-webhook-secret:latest,ANON_ID_SALT=trustcore-anon-id-salt:latest"
+   ```
+   Add `WITH_GEMINI=1` (and `LLM_EXPLAINER_PROVIDER: "gemini"` in the env file, plus the `trustcore-gemini-api-key` secret) to enable the live explainer.
+5. Verify:
+   ```bash
+   curl -s "$SERVICE_URL/health"
+   ```
+   - `environment` is `production`, `mock_billing` is `false`.
+   - `forwarded_for_entries` equals `TRUSTED_PROXY_HOPS` in the env file. If not, fix the value and redeploy.
+6. In Stripe, point the webhook endpoint at `$SERVICE_URL/api/v1/billing/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.deleted`, and store its signing secret as a new version of `trustcore-stripe-webhook-secret`.
+
+The service refuses to start if anything required is missing; the revision log names the variable. With more than one instance, rate limits are per instance unless `RATE_LIMIT_STORAGE_URI` points at a shared store.
+
+### 8.4 Deploy the web app to Vercel
+
+Project settings: Root Directory `apps/web`, Framework Next.js, default build command. Environment variables (Production):
+
+| Variable | Value |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Cloud Run service URL (no trailing slash) |
+| `NEXT_PUBLIC_USE_MOCK` | `false` — **required**; the build default is `true` (demo data) |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon (publishable) key |
+| `NEXT_PUBLIC_SITE_URL` | Public site origin, e.g. `https://trustcore.example` (canonical URLs, sitemap, robots) |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | Contact address shown on the legal pages and the sprint CTA |
+| `NEXT_PUBLIC_LEGAL_ENTITY` | Legal name of the company operating the service |
+| `NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL` | Plausible script URL from the site's installation snippet (omit to disable analytics) |
+| `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | Site domain as registered in Plausible, if the snippet uses `data-domain` |
+
+`NEXT_PUBLIC_*` values are compiled into the bundle: redeploy after changing one. None of them is a secret.
+
+After the first deploy: put the Vercel origin in `CORS_ORIGINS` (API), and in Supabase add `https://<web-origin>/auth/callback` to the redirect URLs.
+
+### 8.5 Before Announcing
+
+- **Legal text is a template.** `/privacy` and `/terms` (including the liability cap) need review by counsel, and the legal entity and contact address must be set.
+- **Check the "no training on your data" statement against your LLM provider's terms** before enabling Gemini in production.
+- **Nothing in §8.3–8.4 has been run:** the deploy script, both workflows, and the Vercel settings were written without access to Google Cloud, GitHub Actions, or Vercel. CI targets Python 3.11; the suite was run locally on 3.13.
+- Confirm `TRUSTED_PROXY_HOPS` (step 5 above), the Stripe Prices against the displayed prices, and one real test purchase end to end.
+- **Checked locally in a browser (desktop width):** the landing page, `/sample` against the running API (real engine report, HTTP 200 in 45 ms) and with the API stopped (labelled built-in sample), `/dashboard`, and `/terms`. **Not exercised:** sign-in, uploads, the paywall and checkout, analytics delivery to Plausible, and mobile widths.
+- `checkout_completed` fires again if the `?billing=success` URL is reloaded, and carries no tier.
+- Local preview: `.claude/launch.json` starts the web app and the API (the API loads `.env.example` for development settings).

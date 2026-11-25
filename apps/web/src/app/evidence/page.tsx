@@ -33,6 +33,7 @@ import { ScanInputFile, Report, SourceCitation, EvidenceMappingItem, isPreviewRe
 import { runScan, getSampleData, isMockEnabled, toUiError, type UiError } from '@/lib/api';
 import { MOCK_REPORTS } from '@/lib/mockData';
 import { useBilling } from '@/lib/billing';
+import { track } from '@/lib/analytics';
 
 export default function EvidenceWorkbenchPage() {
   const [questionnaireFiles, setQuestionnaireFiles] = useState<ScanInputFile[]>([]);
@@ -63,6 +64,7 @@ export default function EvidenceWorkbenchPage() {
       if (stagedFiles.length === 0) {
         const sample = await getSampleData('evidence');
         scanFiles = sample.files || [];
+        track('sample_loaded', { product: 'evidence', source: 'product_page' });
       }
       const res = await runScan({
         product: 'evidence',
@@ -86,6 +88,7 @@ export default function EvidenceWorkbenchPage() {
     setScanError(null);
     try {
       const sample = await getSampleData('evidence');
+      track('sample_loaded', { product: 'evidence', source: 'product_page' });
       setProjectName(sample.project_name || 'SOC 2 Type II Vendor Review');
       // The sample ships policy documents; controls come from the built-in SOC 2 set.
       setQuestionnaireFiles([]);
