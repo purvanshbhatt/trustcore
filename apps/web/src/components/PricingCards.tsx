@@ -7,7 +7,7 @@ import { ApiError, createCheckout, toUiError, type UiError } from '@/lib/api';
 import { ApiErrorNotice } from '@/components/ApiErrorNotice';
 import { ContactLink } from '@/components/ContactLink';
 
-type CheckoutTier = 'per_scan' | 'pro_monthly';
+type CheckoutTier = 'per_scan' | 'pro_monthly' | 'enterprise_monthly';
 
 interface CheckoutPlan {
   readonly tier: CheckoutTier;
@@ -28,7 +28,7 @@ const CHECKOUT_PLANS: readonly CheckoutPlan[] = [
   {
     tier: 'per_scan',
     kicker: 'One-time',
-    name: 'Launch Audit',
+    name: 'Per-Scan',
     price: '$29',
     unit: 'one-time, per audit',
     blurb: 'One full audit with any of the four tools, for the app or agent you are about to ship.',
@@ -38,35 +38,48 @@ const CHECKOUT_PLANS: readonly CheckoutPlan[] = [
       'Copy-paste fix prompts',
       'Markdown, JSON and print / PDF export',
     ],
-    cta: 'Buy a Launch Audit — $29',
+    cta: 'Buy Per-Scan — $29',
   },
   {
     tier: 'pro_monthly',
     kicker: 'Subscription',
-    name: 'Pro Builder',
+    name: 'Pro Monthly',
     price: '$49',
     unit: '/mo',
     blurb: 'A full report on every scan while you build, without buying audits one at a time.',
     features: [
       'Full reports across all four tools',
-      'Everything in Launch Audit, on every scan',
+      'Everything in Per-Scan, on every scan',
       'Billed monthly through Stripe',
     ],
-    cta: 'Start Pro Builder — $49/mo',
+    cta: 'Start Pro Monthly — $49/mo',
+  },
+  {
+    // Lists only what the API grants an Enterprise subscription today. Add a
+    // differentiator here only once the service implements it.
+    tier: 'enterprise_monthly',
+    kicker: 'Subscription',
+    name: 'Enterprise',
+    price: '$199',
+    unit: '/mo',
+    blurb: 'The Enterprise subscription: a full report on every scan, billed monthly.',
+    features: [
+      'Full reports across all four tools',
+      'Everything in Per-Scan, on every scan',
+      'Billed monthly through Stripe',
+    ],
+    cta: 'Start Enterprise — $199/mo',
   },
 ];
 
 const SPRINT_PLAN = {
   kicker: 'Service',
-  name: 'Done-For-You AI Readiness Sprint',
+  name: 'Pre-Enterprise AI Readiness Sprint',
   pricePrefix: 'from',
   price: '$1,500',
-  blurb: 'For teams that want the readiness work done for them.',
-  features: [
-    'Scope and deliverables agreed in a separate statement of work',
-    'Priced per engagement',
-  ],
-  cta: 'Contact us about a sprint',
+  blurb:
+    'For teams that want the readiness work done for them. Scope and deliverables are agreed in a separate statement of work, and the sprint is priced per engagement.',
+  cta: 'Book Pre-Enterprise AI Readiness Sprint',
 } as const;
 
 interface PricingCardsProps {
@@ -77,8 +90,8 @@ interface PricingCardsProps {
 }
 
 /**
- * The three pricing cards: Launch Audit and Pro Builder start a Stripe Checkout
- * session; the sprint is a contact option.
+ * The three pricing cards (Per-Scan, Pro Monthly, Enterprise), each starting a
+ * Stripe Checkout session, plus the sprint, which is a contact option.
  */
 export function PricingCards({ compact = false, onSignInRequired }: PricingCardsProps) {
   const router = useRouter();
@@ -166,34 +179,30 @@ export function PricingCards({ compact = false, onSignInRequired }: PricingCards
             </div>
           );
         })}
+      </div>
 
-        {/* Sprint: sold by conversation, not by checkout */}
-        <div className={`flex flex-col justify-between rounded-2xl border border-zinc-800 bg-[#10111a] ${cardPadding}`}>
-          <div>
-            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              {SPRINT_PLAN.kicker}
-            </span>
-            <h3 className="mt-1.5 text-base font-bold text-white">{SPRINT_PLAN.name}</h3>
-            <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
-              <span className="font-mono text-xs text-zinc-400">{SPRINT_PLAN.pricePrefix}</span>
-              <span className={`font-mono font-extrabold text-zinc-50 ${priceSize}`}>{SPRINT_PLAN.price}</span>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-zinc-400">{SPRINT_PLAN.blurb}</p>
-            <ul className="mt-4 space-y-2 text-xs text-zinc-300">
-              {SPRINT_PLAN.features.map((feature) => (
-                <li key={feature} className="flex items-start">
-                  <Check className="mr-2 mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
+      {/* Sprint: a separate call to action, sold by conversation and not by checkout */}
+      <div
+        className={`flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-[#10111a] md:flex-row md:items-center md:justify-between ${cardPadding}`}
+      >
+        <div className="max-w-2xl">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            {SPRINT_PLAN.kicker}
+          </span>
+          <h3 className="mt-1.5 text-base font-bold text-white">{SPRINT_PLAN.name}</h3>
+          <p className="mt-2 text-xs leading-relaxed text-zinc-400">{SPRINT_PLAN.blurb}</p>
+        </div>
+
+        <div className="flex shrink-0 flex-col gap-3 md:items-end">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="font-mono text-xs text-zinc-400">{SPRINT_PLAN.pricePrefix}</span>
+            <span className="font-mono text-2xl font-extrabold text-zinc-50">{SPRINT_PLAN.price}</span>
           </div>
-
           <ContactLink
             label={SPRINT_PLAN.cta}
             subject={SPRINT_PLAN.name}
-            className="mt-6 block w-full rounded-xl border border-zinc-700 bg-zinc-800 py-2.5 text-center text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700 hover:text-white"
-            placeholderClassName="mt-6 block w-full rounded-xl border border-dashed border-zinc-700 px-3 py-2.5 text-center text-xs text-zinc-400"
+            className="block rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-center text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700 hover:text-white"
+            placeholderClassName="block rounded-xl border border-dashed border-zinc-700 px-3 py-2.5 text-center text-xs text-zinc-400"
           />
         </div>
       </div>

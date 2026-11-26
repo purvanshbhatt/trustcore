@@ -45,6 +45,10 @@ data/
 *.sqlite
 *.db
 
+# Generated analysis and benchmark output (local only)
+graphify-out/
+.ecc/
+
 # Environment & Secrets
 deploy/cloud-run.env.yaml
 .env

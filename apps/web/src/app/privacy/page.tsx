@@ -81,9 +81,19 @@ export default function PrivacyPage() {
 
       <LegalSection title="Analytics" id="analytics">
         <p>
-          We use Plausible, a cookieless analytics service. It records page views and four product events: a
-          sample was loaded, a scan was started, the paywall was opened, and a checkout was completed. It
-          records no personal data.
+          We use PostHog for product analytics. It records five product events: a sample was loaded, a scan
+          was started, a locked preview was shown, the paywall was opened, and a checkout was completed.
+        </p>
+        <p>
+          These events are not tied to a page: no page views and no page addresses are recorded. No cookies
+          are set. Events are grouped by a random, anonymous id that is kept for the current browser tab only.
+        </p>
+        <p>
+          The events contain no file names, file contents, repository URLs, report ids or email addresses.
+        </p>
+        <p>
+          As with any web request, PostHog&apos;s servers see the IP address an event is sent from. We do not
+          add it to the event.
         </p>
       </LegalSection>
 

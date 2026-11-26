@@ -98,6 +98,27 @@ const PRODUCTS: readonly ProductCard[] = [
   },
 ];
 
+interface EnginePoint {
+  readonly name: string;
+  readonly body: string;
+}
+
+/** The Dual-Engine value proposition stated in the hero; keep it in sync with /security. */
+const DUAL_ENGINE: readonly EnginePoint[] = [
+  {
+    name: 'Deterministic Rule Engine',
+    body: 'Produces every finding and the readiness score. Each finding cites its file, line and rule.',
+  },
+  {
+    name: 'AI Remediation Prompts',
+    body: 'Turn those findings into copy-paste fixes for your AI editor.',
+  },
+  {
+    name: 'Zero-Retention Mode',
+    body: 'Switch it on and the scan runs in memory and stores nothing.',
+  },
+];
+
 interface Step {
   readonly title: string;
   readonly body: string;
@@ -207,29 +228,44 @@ export default function LandingPage() {
             </h1>
 
             <p className="mt-5 max-w-xl text-base leading-relaxed text-zinc-400">
-              TrustCore checks what your AI tools generated and what your agents are allowed to do. Every finding
-              cites its file, line and rule, and comes with a fix prompt you can paste straight back into your AI
-              editor.
+              TrustCore is a Dual-Engine scanner for what your AI tools generated and what your agents are
+              allowed to do.
             </p>
+
+            <dl className="mt-5 max-w-xl space-y-3">
+              {DUAL_ENGINE.map((point) => (
+                <div key={point.name} className="border-l-2 border-blue-500/40 pl-3">
+                  <dt className="text-sm font-semibold text-zinc-100">{point.name}</dt>
+                  <dd className="mt-0.5 text-sm leading-relaxed text-zinc-400">{point.body}</dd>
+                </div>
+              ))}
+            </dl>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
-                href="/sample"
+                href="/launchgate"
                 className="flex items-center justify-center space-x-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-500"
               >
-                <span>Try Live Sample Audit</span>
+                <span>Run Free Preview Scan</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/launchgate"
+                href="/dashboard"
                 className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/70 px-6 py-3 text-sm font-semibold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
               >
-                Scan my repo
+                Open Workspace
               </Link>
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-zinc-500">
-              The sample needs no login. Your first preview scan is free: overall score plus the top 2 findings.
+              Your first preview scan is free: overall score plus the top 2 findings. Not ready to upload?{' '}
+              <Link
+                href="/sample"
+                className="font-semibold text-zinc-300 underline underline-offset-2 transition hover:text-white"
+              >
+                See a sample report
+              </Link>
+              .
             </p>
           </div>
 
@@ -290,10 +326,7 @@ export default function LandingPage() {
               )}
             </div>
             <figcaption className="mt-3 text-[11px] text-zinc-500">
-              Excerpt from the sample report for a bundled demo app.{' '}
-              <Link href="/sample" className="font-semibold text-blue-400 hover:underline">
-                Open the full sample
-              </Link>
+              Excerpt from the sample report for a bundled demo app.
             </figcaption>
           </figure>
         </div>
@@ -392,14 +425,14 @@ export default function LandingPage() {
               <p className="text-sm font-bold text-emerald-200">Your first preview scan is free.</p>
               <p className="mt-1 text-sm leading-relaxed text-zinc-400">
                 It includes the overall score and the top 2 findings. The full report, with every finding, exact
-                citations, fix prompts and exports, comes with a Launch Audit or Pro Builder.
+                citations, fix prompts and exports, comes with Per-Scan, Pro Monthly or Enterprise.
               </p>
             </div>
             <Link
               href="/launchgate"
               className="flex shrink-0 items-center justify-center space-x-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
             >
-              <span>Run a free preview scan</span>
+              <span>Run Free Preview Scan</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -449,24 +482,25 @@ export default function LandingPage() {
         <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
           <div className="rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#121422] to-[#0a0b12] p-8 text-center sm:p-12">
             <h2 className="mx-auto max-w-2xl text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-              Read a full report before you share any code
+              Run your first preview scan free
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-zinc-400 sm:text-base">
-              The sample audit runs on a bundled demo app. No login and no upload.
+              The preview shows your overall score and the top 2 findings. Switch on Zero-Retention Mode and the
+              scan runs in memory and stores nothing.
             </p>
             <div className="mt-7 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
               <Link
-                href="/sample"
+                href="/launchgate"
                 className="flex items-center justify-center space-x-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-500"
               >
-                <span>Try Live Sample Audit</span>
+                <span>Run Free Preview Scan</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/launchgate"
+                href="/dashboard"
                 className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/70 px-6 py-3 text-sm font-semibold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
               >
-                Scan my repo
+                Open Workspace
               </Link>
             </div>
           </div>

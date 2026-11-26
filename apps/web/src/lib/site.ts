@@ -21,7 +21,7 @@ export const SITE_URL: string = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'ht
 );
 
 /** "Last updated" date shown on /security, /privacy and /terms. */
-export const LEGAL_LAST_UPDATED = '24 November 2026';
+export const LEGAL_LAST_UPDATED = '25 November 2026';
 
 /** ISO form of `LEGAL_LAST_UPDATED`, for the sitemap. */
-export const LEGAL_LAST_UPDATED_ISO = '2026-11-24';
+export const LEGAL_LAST_UPDATED_ISO = '2026-11-25';

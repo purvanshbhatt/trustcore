@@ -357,7 +357,7 @@ The API filters every statement by `user_id`; RLS is a second layer that keeps t
 
 ### 6.6 Benchmarks
 
-`.ecc/benchmarks/phase2a-api-2026-11-23.json` records in-process API latency before and after Phase 2A (100 requests per endpoint, then 10 concurrent workers). With auth on, against the SQLite development backend (Postgres was not measured):
+`.ecc/benchmarks/phase2a-api-2026-11-23.json` (a local, git-ignored file) records in-process API latency before and after Phase 2A (100 requests per endpoint, then 10 concurrent workers). With auth on, against the SQLite development backend (Postgres was not measured):
 
 | | Before (`a8dd682`) | After |
 |---|---|---|
@@ -485,33 +485,38 @@ Engine 1 stays the only source of findings, severities, counts, and score: none 
 
 | Route | Purpose |
 |---|---|
-| `/` | Public marketing landing page: value proposition, "Try Live Sample Audit", four-product grid, pricing. |
+| `/` | Public marketing landing page: Dual-Engine value proposition, primary CTA "Run Free Preview Scan" (`/launchgate`), secondary "Open Workspace" (`/dashboard`), four-product grid, pricing, footer links to `/security`, `/privacy`, `/terms`. |
 | `/sample` | Sample audit, no login. Shows `GET /api/v1/samples/{product}/report`; falls back to the built-in sample, with a note, if the API is unreachable or has not answered within 2.5 s. Always labelled as sample data. |
 | `/security`, `/privacy`, `/terms` | Trust and legal pages. |
 | `/dashboard` | The workspace hub (previously `/`). Stripe Checkout and sign-in return here (`/dashboard?billing=success`). |
 | `/launchgate`, `/agentscope`, `/evidence`, `/evalkit`, `/reports/[id]`, `/login` | Unchanged. |
 
-Pricing shown on the site: **Launch Audit $29** (tier `per_scan`), **Pro Builder $49/mo** (`pro_monthly`), **Done-For-You AI Readiness Sprint from $1,500** (contact). The amounts charged are whatever the Stripe Prices behind `STRIPE_PRICE_ID_*` say: create the Prices to match.
+Pricing cards match the Stripe tiers: **Per-Scan** $29 (`per_scan`), **Pro Monthly** $49/mo (`pro_monthly`), **Enterprise** $199/mo (`enterprise_monthly`; the Phase 1 paywall price), plus a "Book Pre-Enterprise AI Readiness Sprint" contact CTA. The amounts charged are whatever the Stripe Prices behind `STRIPE_PRICE_ID_*` say: create the Prices to match.
 
-### 8.2 Analytics (Plausible, cookieless)
+### 8.2 Analytics (PostHog, cookieless)
 
-Off unless `NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL` is set. Events (`src/lib/analytics.ts`), each with enumerated properties only (product, tier, source, zero-retention flag) and never file names, contents, repo URLs, report ids, or emails:
+Off unless `NEXT_PUBLIC_POSTHOG_KEY` is set: with no key there are no network calls and no storage. Events (`src/lib/analytics.ts`), each with enumerated properties only (product, tier, source, zero-retention flag) and never file names, contents, repo URLs, report ids, or emails:
 
 | Event | Fired when |
 |---|---|
 | `sample_loaded` | A sample audit is shown on `/sample`, or a product page loads its sample. |
 | `scan_started` | A scan request is sent. |
+| `preview_locked` | A free-preview report (locked content withheld) is shown. |
 | `paywall_opened` | The paywall opens. |
 | `checkout_completed` | The app is opened with `?billing=success` after Stripe Checkout. |
 
-Add the four names as custom event goals in the Plausible site settings. `checkout_completed` reflects the browser returning from Checkout; Stripe remains the source of truth for payments.
+Events are posted to PostHog's capture API on `NEXT_PUBLIC_POSTHOG_HOST` (default `https://us.i.posthog.com`) with an anonymous per-tab id and no person profile; no cookies or `localStorage` are used (the id lives in `sessionStorage`). No page URLs or referrers are sent. PostHog still sees the visitor's IP address on each request: turn on "Discard client IP data" in the PostHog project settings to keep it out of stored events. `checkout_completed` reflects the browser returning from Checkout; Stripe remains the source of truth for payments.
 
 ### 8.3 Deploy the API to Cloud Run
 
-Files: `deploy/cloud-run-deploy.sh`, `deploy/cloud-run.env.example.yaml`, `.github/workflows/deploy-api.yml` (manual trigger), `.github/workflows/ci.yml` (pytest + web build on push and pull request).
+Files: `deploy/cloudrun.sh`, `deploy/cloud-run.env.example.yaml`, `.github/workflows/deploy.yml` (manual trigger), `.github/workflows/ci.yml` (pytest + web build on push and pull request).
 
-1. Apply `services/api/migrations/001_reports.sql` and `002_entitlements.sql` to the database.
-2. Enable APIs and create the secrets (values via stdin):
+1. **Supabase migrations, in order.** Supabase Dashboard > SQL Editor > New query: paste and run `services/api/migrations/001_reports.sql`, then `002_entitlements.sql` (or `psql "$DATABASE_URL" -f` each file). Check Table Editor shows `reports`, `entitlements`, `stripe_events` with RLS enabled. The API refuses to start if a table is missing. `DATABASE_URL` is the project's connection string (Project Settings > Database; the transaction pooler on port 6543 works).
+2. **Stripe (live mode): Prices and webhook endpoint.**
+   1. Product catalog: create three Prices: Per-Scan (one-time), Pro Monthly (recurring), Enterprise (recurring). Copy each `price_…` id.
+   2. Developers > Webhooks > Add endpoint. URL: `https://<api-host>/api/v1/billing/webhook`. Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.deleted`.
+   3. Copy the endpoint's signing secret (`whsec_…`). The API does not start without it, so create the endpoint before the first deploy. If the API host is not known yet, enter the planned URL and correct it in step 7.
+3. Enable APIs and create the secrets (values via stdin, never in a file or a command argument):
    ```bash
    gcloud services enable run.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com --project "$PROJECT_ID"
    printf '%s' "$DATABASE_URL" | gcloud secrets create trustcore-database-url --data-file=- --project "$PROJECT_ID"
@@ -520,10 +525,23 @@ Files: `deploy/cloud-run-deploy.sh`, `deploy/cloud-run.env.example.yaml`, `.gith
    openssl rand -hex 32 | gcloud secrets create trustcore-anon-id-salt --data-file=- --project "$PROJECT_ID"
    ```
    Grant the Cloud Run service account `roles/secretmanager.secretAccessor`.
-3. `cp deploy/cloud-run.env.example.yaml deploy/cloud-run.env.yaml` (git-ignored) and replace every `YOUR-` / `REPLACE` value.
-4. Deploy:
+4. **Cloud Run environment.** `cp deploy/cloud-run.env.example.yaml deploy/cloud-run.env.yaml` (git-ignored) and replace every `YOUR-` / `REPLACE` value. The service ends up with:
+
+   | Variable | Set in | Value |
+   |---|---|---|
+   | `ENVIRONMENT` | env file | `production` (also what an unset value means) |
+   | `MOCK_BILLING` | env file | `false`; startup fails on `true` |
+   | `CORS_ORIGINS` | env file | Exact web origin(s), comma separated, e.g. `https://app.example.com`; `*` is rejected |
+   | `SUPABASE_URL` | env file | `https://<ref>.supabase.co` (tokens are verified against its JWKS) |
+   | `STRIPE_PRICE_ID_PER_SCAN`, `STRIPE_PRICE_ID_PRO`, `STRIPE_PRICE_ID_ENTERPRISE` | env file | The three `price_…` ids from step 2 |
+   | `TRUSTED_PROXY_HOPS` | env file | `1`, then confirm in step 6 |
+   | `DATABASE_URL` | Secret Manager | Supabase Postgres connection string (step 1) |
+   | `STRIPE_SECRET_KEY` | Secret Manager | Live-mode secret key |
+   | `STRIPE_WEBHOOK_SECRET` | Secret Manager | Signing secret from step 2 |
+   | `ANON_ID_SALT` | Secret Manager | Random value (`openssl rand -hex 32`); keeps signed-out visitor hashes irreversible |
+5. Deploy:
    ```bash
-   PROJECT_ID=my-gcp-project REGION=us-central1 bash deploy/cloud-run-deploy.sh
+   PROJECT_ID=my-gcp-project REGION=us-central1 bash deploy/cloudrun.sh
    ```
    which runs exactly:
    ```bash
@@ -536,13 +554,13 @@ Files: `deploy/cloud-run-deploy.sh`, `deploy/cloud-run.env.example.yaml`, `.gith
      --set-secrets "DATABASE_URL=trustcore-database-url:latest,STRIPE_SECRET_KEY=trustcore-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=trustcore-stripe-webhook-secret:latest,ANON_ID_SALT=trustcore-anon-id-salt:latest"
    ```
    Add `WITH_GEMINI=1` (and `LLM_EXPLAINER_PROVIDER: "gemini"` in the env file, plus the `trustcore-gemini-api-key` secret) to enable the live explainer.
-5. Verify:
+6. Verify:
    ```bash
    curl -s "$SERVICE_URL/health"
    ```
    - `environment` is `production`, `mock_billing` is `false`.
    - `forwarded_for_entries` equals `TRUSTED_PROXY_HOPS` in the env file. If not, fix the value and redeploy.
-6. In Stripe, point the webhook endpoint at `$SERVICE_URL/api/v1/billing/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.deleted`, and store its signing secret as a new version of `trustcore-stripe-webhook-secret`.
+7. **Finish the Stripe webhook.** If the endpoint URL from step 2 was provisional, set it to `$SERVICE_URL/api/v1/billing/webhook`. If Stripe shows a different signing secret afterwards, add it as a new version of `trustcore-stripe-webhook-secret` and redeploy. Then make one purchase and confirm the endpoint's delivery log shows a 2xx response and the account is unlocked; a signature error means the stored secret does not match the endpoint.
 
 The service refuses to start if anything required is missing; the revision log names the variable. With more than one instance, rate limits are per instance unless `RATE_LIMIT_STORAGE_URI` points at a shared store.
 
@@ -559,8 +577,8 @@ Project settings: Root Directory `apps/web`, Framework Next.js, default build co
 | `NEXT_PUBLIC_SITE_URL` | Public site origin, e.g. `https://trustcore.example` (canonical URLs, sitemap, robots) |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | Contact address shown on the legal pages and the sprint CTA |
 | `NEXT_PUBLIC_LEGAL_ENTITY` | Legal name of the company operating the service |
-| `NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL` | Plausible script URL from the site's installation snippet (omit to disable analytics) |
-| `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | Site domain as registered in Plausible, if the snippet uses `data-domain` |
+| `NEXT_PUBLIC_POSTHOG_KEY` | PostHog project API key (omit to disable analytics) |
+| `NEXT_PUBLIC_POSTHOG_HOST` | PostHog ingestion host. Default `https://us.i.posthog.com`; EU projects use `https://eu.i.posthog.com` |
 
 `NEXT_PUBLIC_*` values are compiled into the bundle: redeploy after changing one. None of them is a secret.
 
@@ -571,7 +589,10 @@ After the first deploy: put the Vercel origin in `CORS_ORIGINS` (API), and in Su
 - **Legal text is a template.** `/privacy` and `/terms` (including the liability cap) need review by counsel, and the legal entity and contact address must be set.
 - **Check the "no training on your data" statement against your LLM provider's terms** before enabling Gemini in production.
 - **Nothing in §8.3–8.4 has been run:** the deploy script, both workflows, and the Vercel settings were written without access to Google Cloud, GitHub Actions, or Vercel. CI targets Python 3.11; the suite was run locally on 3.13.
-- Confirm `TRUSTED_PROXY_HOPS` (step 5 above), the Stripe Prices against the displayed prices, and one real test purchase end to end.
-- **Checked locally in a browser (desktop width):** the landing page, `/sample` against the running API (real engine report, HTTP 200 in 45 ms) and with the API stopped (labelled built-in sample), `/dashboard`, and `/terms`. **Not exercised:** sign-in, uploads, the paywall and checkout, analytics delivery to Plausible, and mobile widths.
+- Confirm `TRUSTED_PROXY_HOPS` (step 6 above), the Stripe Prices against the displayed prices, and one real test purchase end to end.
+- **Checked locally in a browser (desktop width):** the landing page, `/sample` against the running API (real engine report, HTTP 200 in 45 ms) and with the API stopped (labelled built-in sample), `/dashboard`, and `/terms`. **Not exercised:** sign-in, uploads, the paywall and checkout, analytics delivery to PostHog, and mobile widths.
 - `checkout_completed` fires again if the `?billing=success` URL is reloaded, and carries no tier.
+- **Enterprise grants the same entitlements as Pro Monthly** (unlimited full scans). The Enterprise card therefore lists the same features at $199/mo: add Enterprise-only features or change the price before selling it.
+- The "Book Pre-Enterprise AI Readiness Sprint" CTA renders only when `NEXT_PUBLIC_CONTACT_EMAIL` is set.
+- PostHog receives the client IP on every event. `/privacy` says so; turn on IP discard in PostHog (§8.2) if stored events must not carry it.
 - Local preview: `.claude/launch.json` starts the web app and the API (the API loads `.env.example` for development settings).

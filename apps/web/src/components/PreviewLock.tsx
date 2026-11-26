@@ -1,16 +1,24 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Lock, Sparkles } from 'lucide-react';
 import { SecurityGauge } from '@/components/SecurityGauge';
+import { track } from '@/lib/analytics';
 import { useBilling } from '@/lib/billing';
-import { getLockedInfo, type Report } from '@/lib/types';
+import { getLockedInfo, isPreviewReport, type Report } from '@/lib/types';
 
 interface PreviewLockedPanelProps {
   report: Report;
   /** Hide the score gauge where the page already renders one. */
   showGauge?: boolean;
 }
+
+/**
+ * Reports whose `preview_locked` event already fired in this page load, so one
+ * report counts once however often its panel mounts. The ids stay in memory and
+ * are never sent anywhere.
+ */
+const trackedPreviewReports = new Set<string>();
 
 /**
  * Free-preview summary: the overall score plus what is withheld until checkout
@@ -20,6 +28,19 @@ export function PreviewLockedPanel({ report, showGauge = true }: PreviewLockedPa
   const { openPaywall } = useBilling();
   const { hiddenFindings } = getLockedInfo(report);
   const shown = report.findings.length;
+  const reportId = report.id;
+  const product = report.product;
+  const preview = isPreviewReport(report);
+
+  // This panel renders wherever a preview report is displayed (the four tool pages and /reports/[id]).
+  useEffect(() => {
+    if (!preview || trackedPreviewReports.has(reportId)) {
+      return;
+    }
+    trackedPreviewReports.add(reportId);
+    // Enumerated value only: never the report id.
+    track('preview_locked', { product });
+  }, [preview, reportId, product]);
 
   return (
     <div className="rounded-xl border border-blue-500/40 bg-blue-500/5 p-5 print:hidden">

@@ -79,14 +79,14 @@ export default function TermsPage() {
 
       <LegalSection title="5. Plans and payment" id="payment">
         <p>
-          Launch Audit is a one-time purchase for a single audit. Pro Builder is a monthly subscription. The
-          price is shown before you pay, and payments are processed by Stripe.
+          Per-Scan is a one-time purchase for a single audit. Pro Monthly and Enterprise are monthly
+          subscriptions. The price is shown before you pay, and payments are processed by Stripe.
         </p>
       </LegalSection>
 
-      <LegalSection title="6. Done-For-You AI Readiness Sprint" id="sprint">
+      <LegalSection title="6. Pre-Enterprise AI Readiness Sprint" id="sprint">
         <p>
-          The Done-For-You AI Readiness Sprint is governed by a separate statement of work agreed with you.
+          The Pre-Enterprise AI Readiness Sprint is governed by a separate statement of work agreed with you.
         </p>
       </LegalSection>
 

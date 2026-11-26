@@ -29,7 +29,7 @@ jobs:
         env:
           CLOUD_RUN_ENV_YAML: ${{ vars.CLOUD_RUN_ENV_YAML }}
       - name: Deploy
-        run: bash deploy/cloud-run-deploy.sh
+        run: bash deploy/cloudrun.sh
         env:
           PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           REGION: ${{ vars.GCP_REGION }}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the TrustCore API to Google Cloud Run.
 #
-#   PROJECT_ID=my-gcp-project REGION=us-central1 bash deploy/cloud-run-deploy.sh
+#   PROJECT_ID=my-gcp-project REGION=us-central1 bash deploy/cloudrun.sh
 #
 # Before the first run:
 #   1. gcloud auth login && gcloud services enable run.googleapis.com \

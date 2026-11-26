@@ -54,11 +54,12 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400">{planSummary}</p>
           <p className="text-xs text-zinc-500">
-            Paid scans unlock every finding, exact source citations, copy-paste fix prompts and report exports.
+            Your first preview scan is free: overall score plus the top 2 findings. Paid scans unlock every
+            finding, exact source citations, copy-paste fix prompts and report exports.
           </p>
         </div>
 
-        {/* Same plans, names and prices as the landing page */}
+        {/* Same three tiers, names and prices as the landing page: Per-Scan, Pro Monthly, Enterprise */}
         <PricingCards compact onSignInRequired={onClose} />
 
         {/* How submitted code and payments are handled (see /security) */}

@@ -39,12 +39,51 @@ export default function SecurityPage() {
         <p>Only the resulting report is stored, and only for signed-in users.</p>
       </LegalSection>
 
+      {/* The five implemented controls, one block each. */}
+
       <LegalSection title="Zero-Retention Mode" id="zero-retention">
         <p>
-          With Zero-Retention Mode on, the scan runs in memory and the report is returned to you but never
-          stored.
+          With Zero-Retention Mode on, the scan runs in memory. The report is returned to you but never
+          written to Postgres, and its findings are never sent to the Gemini model.
         </p>
-        <p>Scans by signed-out visitors are never stored.</p>
+        <p>Scans by signed-out visitors are also never stored.</p>
+      </LegalSection>
+
+      <LegalSection title="Automatic secret redaction" id="secret-redaction">
+        <p>
+          Detected credentials are masked, leaving only the first 4 and last 4 characters, before a report is
+          stored, returned or sent to the model.
+        </p>
+        <p>Logs hold no file contents.</p>
+      </LegalSection>
+
+      <LegalSection title="Server-side preview gating" id="preview-gating">
+        <p>
+          A free preview is cut on the server. It holds the overall score, the finding counts and the top 2
+          findings, without snippets, line numbers or fix prompts.
+        </p>
+        <p>Locked content is never sent to the browser.</p>
+      </LegalSection>
+
+      <LegalSection title="Report isolation" id="isolation">
+        <p>
+          Each report belongs to one account. Every database query filters on the owning account, and Postgres
+          Row Level Security is enabled on the reports table, so the table is closed to other accounts and to
+          anonymous access.
+        </p>
+        <p>A report id that belongs to someone else behaves exactly like a missing one.</p>
+        <p>You can delete a report permanently.</p>
+      </LegalSection>
+
+      <LegalSection title="Prompt-injection-safe fix prompts" id="fix-prompts">
+        <p>
+          Fix prompts never quote text from the scanned repository. They name the file path, the line and the
+          rule only, and paths are reduced to safe characters.
+        </p>
+        <p>
+          Any model-written text is validated. It cannot add or change findings, severities or counts, and a
+          URL or a shell or install command causes it to be discarded.
+        </p>
       </LegalSection>
 
       <LegalSection title="Deterministic first" id="deterministic">
@@ -56,23 +95,8 @@ export default function SecurityPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="Automatic secret masking" id="secret-masking">
-        <p>
-          Detected credentials are masked, leaving only the first 4 and last 4 characters, before a report is
-          returned, stored or sent to the AI layer.
-        </p>
-        <p>Logs contain no file contents.</p>
-      </LegalSection>
-
       <LegalSection title="No model training" id="training">
         <p>TrustCore does not use customer code, uploads or reports to train models.</p>
-      </LegalSection>
-
-      <LegalSection title="Reports belong to one account" id="isolation">
-        <p>
-          Each report belongs to one account. Other accounts cannot read it, list it or delete it. You can
-          delete a report permanently.
-        </p>
       </LegalSection>
 
       <LegalSection title="Signed-out visitors" id="signed-out">

@@ -49,8 +49,9 @@ const SUBPROCESSORS: readonly Subprocessor[] = [
   { name: 'Google Cloud Run', purpose: 'API hosting.' },
   { name: 'Vercel', purpose: 'Web hosting.' },
   {
-    name: 'Plausible',
-    purpose: 'Cookieless analytics: page views and four product events, no personal data.',
+    name: 'PostHog',
+    purpose:
+      'Product analytics: five product events that are not tied to a page, no cookies, an anonymous per-tab id, no file or account data. PostHog sees the sending IP address.',
   },
   { name: 'Google Gemini API', purpose: 'Optional explanations, from redacted findings only.' },
 ];
